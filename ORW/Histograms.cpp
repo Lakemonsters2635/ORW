@@ -204,12 +204,34 @@ void DoHistograms(const cv::Mat& image)
 
 	{
 		cv::Mat mask;
-		//cv::Mat src = image.clone();
-		cv::inRange(hsvImage, cv::Scalar(cchpH.GetMin(), cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(cchpH.GetMax(), cchpS.GetMax(), cchpV.GetMax()), mask);
-		//cv::bitwise_not(mask, mask);
+
+		if (cchpH.GetMax() < cchpH.GetMin())
+		{
+			// Special handling for Hmax < Hmin because H coordinate wraps around
+			//
+			// We need two masks.  One for the H channel and another for the S and V channels.
+			// We then bitwise AND the the two masks for the final mask
+			//
+			// To compute the Hmask, we swap the max and min in the call to inRange and then invert the result
+
+			cv::Mat maskH, maskSV;
+
+			cv::inRange(hsvImage, cv::Scalar(0, cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(180, cchpS.GetMax(), cchpV.GetMax()), maskSV);
+
+			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMax(), 0, 0), cv::Scalar(cchpH.GetMin(), 256, 256), maskH);
+			cv::bitwise_not(maskH, maskH);
+			cv::bitwise_and(maskH, maskSV, mask);
+
+		}
+		else
+		{
+			// Normal Handling for Hmax >= Hmin
+
+			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMin(), cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(cchpH.GetMax(), cchpS.GetMax(), cchpV.GetMax()), mask);
+		}
+
 		cv::Mat dst;
 		cv::bitwise_and(image, image, dst, mask);
 		memcpy(image.data, dst.data, dst.step[0] * dst.rows);
-		int i = 0;
 	}
 }
