@@ -4,4 +4,5 @@
 
 int PostProcess();
 void DoHistograms(const cv::Mat& image);
+void DisplayFrame(rs2::video_frame& frame, const char* Title);
 

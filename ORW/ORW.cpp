@@ -9,6 +9,9 @@
 #include "vendor/implot/implot_demo.cpp"
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/types_c.h>
+#include "DisplayFrame.hpp"						// Because functions in this file rely on example.hpp, we must
+												// include it instead of adding it to the project
+
 
 #include "Utilities.h"
 
@@ -19,7 +22,6 @@
 //#define	RGB_HIST			// Define this if you want RGB histograms to be calculated
 
 CPostProcessing pp;
-
 
 
 static void glfw_error_callback(int error, const char* description)
@@ -102,13 +104,6 @@ int main()
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		static const int flags = ImGuiWindowFlags_NoCollapse
-			| ImGuiWindowFlags_NoScrollbar
-			| ImGuiWindowFlags_NoSavedSettings
-			| ImGuiWindowFlags_NoTitleBar
-			//| ImGuiWindowFlags_NoResize
-			| ImGuiWindowFlags_NoMove;
-
 		//ImPlot::ShowDemoWindow();
 
 		// Create OpenCV matrix of size (w,h) from the colorized depth data
@@ -124,33 +119,8 @@ int main()
 
 		pp.RenderUI(1280, 720);
 
-		ImGui::Begin("Color");
-		{
-			color_image.render(color, { 0, 0, 200.0f*(float)width/(float)height, 200 });
-
-			// Using a Child allow to fill all the space of the window.
-			// It also alows customization
-			ImGui::BeginChild("Color Stream");
-			// Get the size of the child (i.e. the whole draw size of the windows).
-			ImVec2 wsize = ImGui::GetWindowSize();
-			ImGui::Image((ImTextureID)color_image.get_gl_handle(), wsize);
-			ImGui::EndChild();
-		}
-		ImGui::End();
-
-		ImGui::Begin("Depth");
-		{
-			depth_image.render(colorized_depth, { 0, 0, 200.0f * (float)widthDepth / (float)heightDepth, 200 });
-
-			// Using a Child allow to fill all the space of the window.
-			// It also alows customization
-			ImGui::BeginChild("Depth Stream");
-			// Get the size of the child (i.e. the whole draw size of the windows).
-			ImVec2 wsize = ImGui::GetWindowSize();
-			ImGui::Image((ImTextureID)depth_image.get_gl_handle(), wsize);
-			ImGui::EndChild();
-		}
-		ImGui::End();
+		DisplayFrame(color, "Color");
+		DisplayFrame(colorized_depth, "Depth");
 
 		// Rendering
 		ImGui::Render();
