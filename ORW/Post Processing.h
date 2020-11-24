@@ -2,39 +2,10 @@
 
 // This is copied from example.hpp because we cannot include it in 2 places.
 
-struct float3/* {
-    float x, y, z;
-    float3 operator*(float t)
-    {
-        return { x * t, y * t, z * t };
-    }
+struct float3;
+class texture;
 
-    float3 operator-(float t)
-    {
-        return { x - t, y - t, z - t };
-    }
-
-    void operator*=(float t)
-    {
-        x = x * t;
-        y = y * t;
-        z = z * t;
-    }
-
-    void operator=(float3 other)
-    {
-        x = other.x;
-        y = other.y;
-        z = other.z;
-    }
-
-    void add(float t1, float t2, float t3)
-    {
-        x += t1;
-        y += t2;
-        z += t3;
-    }
-}*/;
+extern const std::array<rs2_option, 6> possible_filter_options;
 
 /**
 Helper class for controlling the filter's GUI element
@@ -67,34 +38,63 @@ public:
 };
 
 // Helper functions for rendering the UI
-void render_ui(float w, float h, std::vector<filter_options>& filters);
 // Helper function for getting data from the queues and updating the view
-//void update_data(rs2::frame_queue& data, rs2::frame& depth, rs2::points& points, rs2::pointcloud& pc, glfw_state& view, rs2::colorizer& color_map);
+void update_data(rs2::frame_queue& data, rs2::frame& depth, rs2::points& points, rs2::pointcloud& pc, texture& depth_texture, rs2::colorizer& color_map);
+void update_data(rs2::frame_queue& data, rs2::frame& color);
 
 class CPostProcessing
 {
-public:
-    CPostProcessing()
-        : disparity_filter_name("Disparity")
-        , depth_to_disparity(true)
-        , disparity_to_depth(false)
-        , stopped(false)
-    {
-        // The following order of emplacement will dictate the orders in which filters are applied
-        filters.emplace_back("Decimate", dec_filter);
-        filters.emplace_back("Threshold", thr_filter);
-        filters.emplace_back(disparity_filter_name, depth_to_disparity);
-        filters.emplace_back("Spatial", spat_filter);
-        filters.emplace_back("Temporal", temp_filter);
-    }
+private:
 
-    void RenderUI(float w, float h)
+    //struct Defaults
+    //{
+    //    int     dec_Magnitude;
+    //    float   thr_MinDIstance;
+    //    float   thr_MaxDistance;
+    //    float   spat_SmoothAlpha;
+    //    int     spat_Magnitude;
+    //    int     spat_SmoothDelta;
+    //    int     spat_HolesFill;
+    //    int     temp_HolesFill;
+    //    float   temp_SmoothAlpha;
+    //    int     temp_SmoothDelta;
+
+    //};
+
+public:
+    CPostProcessing();
+
+    void render_ui(/*std::vector<filter_options>& filters*/);
+
+    void RenderUI()
     {
         // Render the GUI
-        render_ui(w, h, filters);
+        render_ui(/*filters*/);
+    }
+
+    void StartProcessing(rs2::pipeline& the_pipe);
+
+    void UpdateData();
+    void RegisterSettings();
+    void ImportSettings();
+    void Reset();
+
+    void Stop()
+    {
+        stopped = true;
     }
 
 protected:
+    struct Default
+    {
+        filter_options& fo;
+        rs2_option opt;
+        bool is_int;
+        float value;
+    };
+
+    std::map<std::string, Default> filterDefaults;
+
     rs2::decimation_filter dec_filter;  // Decimation - reduces depth frame density
     rs2::threshold_filter thr_filter;   // Threshold  - removes values outside recommended range
     rs2::spatial_filter spat_filter;    // Spatial    - edge-preserving spatial smoothing
@@ -112,11 +112,36 @@ protected:
     // Declaring two concurrent queues that will be used to enqueue and dequeue frames from different threads
     rs2::frame_queue original_data;
     rs2::frame_queue filtered_data;
+    rs2::frame_queue color_data;        // The color stream
 
     // Declare depth colorizer for pretty visualization of depth data
     rs2::colorizer color_map;
 
     // Atomic boolean to allow thread safe way to stop the thread
     std::atomic_bool stopped;
+
+    // The processing thread
+    std::thread *processing_thread;
+
+    // The pipeline
+    rs2::pipeline* ppipe;
+
+    // Declare pointcloud objects, for calculating pointclouds and texture mappings
+    rs2::pointcloud original_pc;
+    rs2::pointcloud filtered_pc;
+
+public:
+    // These hold the most recent frames
+    rs2::frame color;
+    rs2::frame colored_depth;
+    rs2::frame colored_filtered;
+
+    glfw_state depth_state{};
+    glfw_state filtered_state{};
+
+    // Declare objects that will hold the calculated pointclouds and colored frames
+   // We save the last set of data to minimize flickering of the view
+    rs2::points original_points;
+    rs2::points filtered_points;
 
 };

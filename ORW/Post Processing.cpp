@@ -8,6 +8,8 @@
 #include <GLFW/glfw3.h>
 #include "vendor/imgui/imgui_impl_glfw.h"
 #include "vendor/imgui/imgui_impl_opengl3.h"
+#include "vendor/RealSense/rs_example.h"
+#include "Utilities.h"
 
 #include <map>
 #include <string>
@@ -15,247 +17,73 @@
 #include <atomic>
 
 #include "Post Processing.h"
-//#include <imgui.h>
-//#include "imgui_impl_glfw.h"
 
-struct float3 {
-    float x, y, z;
-    float3 operator*(float t)
-    {
-        return { x * t, y * t, z * t };
-    }
-
-    float3 operator-(float t)
-    {
-        return { x - t, y - t, z - t };
-    }
-
-    void operator*=(float t)
-    {
-        x = x * t;
-        y = y * t;
-        z = z * t;
-    }
-
-    void operator=(float3 other)
-    {
-        x = other.x;
-        y = other.y;
-        z = other.z;
-    }
-
-    void add(float t1, float t2, float t3)
-    {
-        x += t1;
-        y += t2;
-        z += t3;
-    }
+const std::array<rs2_option, 6> possible_filter_options = {
+    RS2_OPTION_FILTER_MAGNITUDE,
+    RS2_OPTION_FILTER_SMOOTH_ALPHA,
+    RS2_OPTION_MIN_DISTANCE,
+    RS2_OPTION_MAX_DISTANCE,
+    RS2_OPTION_FILTER_SMOOTH_DELTA,
+    RS2_OPTION_HOLES_FILL
 };
 
 
-#if 0
-int PostProcess() try
-{
-    //// Create a simple OpenGL window for rendering:
-    //window app(1280, 720, "RealSense Post Processing Example");
-    //ImGui_ImplGlfw_Init(app, false);
-
-    //// Construct objects to manage view state
-    //glfw_state original_view_orientation{};
-    //glfw_state filtered_view_orientation{};
-
-    //// Declare pointcloud objects, for calculating pointclouds and texture mappings
-    //rs2::pointcloud original_pc;
-    //rs2::pointcloud filtered_pc;
-
-    //// Declare RealSense pipeline, encapsulating the actual device and sensors
-    //rs2::pipeline pipe;
-    //rs2::config cfg;
-    //// Use a configuration object to request only depth from the pipeline
-    //cfg.enable_stream(RS2_STREAM_DEPTH, 640, 0, RS2_FORMAT_Z16, 30);
-    //// Start streaming with the above configuration
-    //pipe.start(cfg);
-
-#if 0
-    // Declare filters
-    rs2::decimation_filter dec_filter;  // Decimation - reduces depth frame density
-    rs2::threshold_filter thr_filter;   // Threshold  - removes values outside recommended range
-    rs2::spatial_filter spat_filter;    // Spatial    - edge-preserving spatial smoothing
-    rs2::temporal_filter temp_filter;   // Temporal   - reduces temporal noise
-
-                                        // Declare disparity transform from depth to disparity and vice versa
-    const std::string disparity_filter_name = "Disparity";
-    rs2::disparity_transform depth_to_disparity(true);
-    rs2::disparity_transform disparity_to_depth(false);
-
-    // Initialize a vector that holds filters and their options
-    std::vector<filter_options> filters;
-
-    // The following order of emplacement will dictate the orders in which filters are applied
-    filters.emplace_back("Decimate", dec_filter);
-    filters.emplace_back("Threshold", thr_filter);
-    filters.emplace_back(disparity_filter_name, depth_to_disparity);
-    filters.emplace_back("Spatial", spat_filter);
-    filters.emplace_back("Temporal", temp_filter);
-
-    // Declaring two concurrent queues that will be used to enqueue and dequeue frames from different threads
-    rs2::frame_queue original_data;
-    rs2::frame_queue filtered_data;
-
-    // Declare depth colorizer for pretty visualization of depth data
-    rs2::colorizer color_map;
-
-    // Atomic boolean to allow thread safe way to stop the thread
-    std::atomic_bool stopped(false);
-
-    // Create a thread for getting frames from the device and process them
-    // to prevent UI thread from blocking due to long computations.
-
-    std::thread processing_thread([&]() {
-        while (!stopped) //While application is running
-        {
-            rs2::frameset data = pipe.wait_for_frames(); // Wait for next set of frames from the camera
-            rs2::frame depth_frame = data.get_depth_frame(); //Take the depth frame from the frameset
-            if (!depth_frame) // Should not happen but if the pipeline is configured differently
-                return;       //  it might not provide depth and we don't want to crash
-
-            rs2::frame filtered = depth_frame; // Does not copy the frame, only adds a reference
-
-            /* Apply filters.
-            The implemented flow of the filters pipeline is in the following order:
-            1. apply decimation filter
-            2. apply threshold filter
-            3. transform the scene into disparity domain
-            4. apply spatial filter
-            5. apply temporal filter
-            6. revert the results back (if step Disparity filter was applied
-            to depth domain (each post processing block is optional and can be applied independantly).
-            */
-            bool revert_disparity = false;
-            for (auto&& filter : filters)
-            {
-                if (filter.is_enabled)
-                {
-                    filtered = filter.filter.process(filtered);
-                    if (filter.filter_name == disparity_filter_name)
-                    {
-                        revert_disparity = true;
-                    }
-                }
-            }
-            if (revert_disparity)
-            {
-                filtered = disparity_to_depth.process(filtered);
-            }
-
-            // Push filtered & original data to their respective queues
-            // Note, pushing to two different queues might cause the application to display
-            //  original and filtered pointclouds from different depth frames
-            //  To make sure they are synchronized you need to push them together or add some
-            //  synchronization mechanisms
-            filtered_data.enqueue(filtered);
-            original_data.enqueue(depth_frame);
-        }
-    });
-
-
-
-    // Declare objects that will hold the calculated pointclouds and colored frames
-    // We save the last set of data to minimize flickering of the view
-    rs2::frame colored_depth;
-    rs2::frame colored_filtered;
-    rs2::points original_points;
-    rs2::points filtered_points;
-
-
-    // Save the time of last frame's arrival
-    auto last_time = std::chrono::high_resolution_clock::now();
-    // Maximum angle for the rotation of the pointcloud
-    const double max_angle = 15.0;
-    // We'll use rotation_velocity to rotate the pointcloud for a better view of the filters effects
-    float rotation_velocity = 0.3f;
-
-    while (app)
-    {
-        float w = static_cast<float>(app.width());
-        float h = static_cast<float>(app.height());
-
-        // Render the GUI
-        render_ui(w, h, filters);
-
-
-        // Try to get new data from the queues and update the view with new texture
-        update_data(original_data, colored_depth, original_points, original_pc, original_view_orientation, color_map);
-        update_data(filtered_data, colored_filtered, filtered_points, filtered_pc, filtered_view_orientation, color_map);
-
-        draw_text(10, 50, "Original");
-        draw_text(static_cast<int>(w / 2), 50, "Filtered");
-
-        // Draw the pointclouds of the original and the filtered frames (if the are available already)
-        if (colored_depth && original_points)
-        {
-            glViewport(0, int(h) / 2, int(w) / 2, int(h) / 2);
-            draw_pointcloud(int(w) / 2, int(h) / 2, original_view_orientation, original_points);
-        }
-        if (colored_filtered && filtered_points)
-        {
-            glViewport(int(w) / 2, int(h) / 2, int(w) / 2, int(h) / 2);
-            draw_pointcloud(int(w) / 2, int(h) / 2, filtered_view_orientation, filtered_points);
-        }
-        // Update time of current frame's arrival
-        auto curr = std::chrono::high_resolution_clock::now();
-
-        // Time interval which must pass between movement of the pointcloud
-        const std::chrono::milliseconds rotation_delta(40);
-
-        // In order to calibrate the velocity of the rotation to the actual displaying speed, rotate
-        //  pointcloud only when enough time has passed between frames
-        if (curr - last_time > rotation_delta)
-        {
-            if (fabs(filtered_view_orientation.yaw) > max_angle)
-            {
-                rotation_velocity = -rotation_velocity;
-            }
-            original_view_orientation.yaw += rotation_velocity;
-            filtered_view_orientation.yaw += rotation_velocity;
-            last_time = curr;
-        }
-#endif
-    }
-
-    // Signal the processing thread to stop, and join
-    // (Not the safest way to join a thread, please wrap your threads in some RAII manner)
-    stopped = true;
- //   processing_thread.join();
-
-    return EXIT_SUCCESS;
-}
-catch (const rs2::error& e)
-{
-    std::cerr << "RealSense error calling " << e.get_failed_function() << "(" << e.get_failed_args() << "):\n    " << e.what() << std::endl;
-    return EXIT_FAILURE;
-}
-catch (const std::exception& e)
-{
-    std::cerr << e.what() << std::endl;
-    return EXIT_FAILURE;
-}
-
-
-void update_data(rs2::frame_queue& data, rs2::frame& colorized_depth, rs2::points& points, rs2::pointcloud& pc, glfw_state& view, rs2::colorizer& color_map)
+void update_data(rs2::frame_queue& data, rs2::frame& colorized_depth, rs2::points& points, rs2::pointcloud& pc, texture& depth_texture, rs2::colorizer& color_map)
 {
     rs2::frame f;
-    if (data.poll_for_frame(&f))  // Try to take the depth and points from the queue
+    if (data.poll_for_frame(&f))                    // Try to take the depth and points from the queue
     {
-        points = pc.calculate(f); // Generate pointcloud from the depth data
+        points = pc.calculate(f);                   // Generate pointcloud from the depth data
         colorized_depth = color_map.process(f);     // Colorize the depth frame with a color map
-        pc.map_to(colorized_depth);         // Map the colored depth to the point cloud
-        view.tex.upload(colorized_depth);   //  and upload the texture to the view (without this the view will be B&W)
+        pc.map_to(colorized_depth);                 // Map the colored depth to the point cloud
+        depth_texture.upload(colorized_depth);      // Upload the colorized depth to a texture
     }
 }
-#endif
 
-void render_ui(float w, float h, std::vector<filter_options>& filters)
+void update_data(rs2::frame_queue& data, rs2::frame& color)
+{
+   data.poll_for_frame(&color);
+}
+
+CPostProcessing::CPostProcessing()
+    : disparity_filter_name("Disparity")
+    , depth_to_disparity(true)
+    , disparity_to_depth(false)
+    , stopped(false)
+    , processing_thread(nullptr)
+{
+
+        // The following order of emplacement will dictate the orders in which filters are applied
+        filters.emplace_back("Decimate", dec_filter);
+        filters.emplace_back("Threshold", thr_filter);
+        filters.emplace_back(disparity_filter_name, depth_to_disparity);
+        filters.emplace_back("Spatial", spat_filter);
+        filters.emplace_back("Temporal", temp_filter);
+
+    // Get the default values for the filters.
+    // If the above set of filters changes, the following
+    // code is adaptive and will not need changing.
+
+    for (rs2_option opt : possible_filter_options)
+    {
+        for (auto& fo : filters)
+        {
+            auto flt = fo.filter;
+
+            if (flt.supports(opt))
+            {
+                rs2::option_range range = flt.get_option_range(opt);
+                std::string key = fo.filter_name + "_" + flt.get_option_name(opt);
+                Default def = { fo, opt, filter_slider_ui::is_all_integers(range), flt.get_option(opt) };
+                filterDefaults.emplace(key, def);
+                int i = 0;
+            }
+        }
+    }
+}
+
+
+void CPostProcessing::render_ui(/*std::vector<filter_options>& filters*/)
 {
     // Flags for displaying ImGui window
     static const int flags = ImGuiWindowFlags_NoCollapse
@@ -265,22 +93,21 @@ void render_ui(float w, float h, std::vector<filter_options>& filters)
         | ImGuiWindowFlags_NoResize
         | ImGuiWindowFlags_NoMove;
 
-    //ImGui_ImplGlfw_NewFrame();
-    //ImGui::SetNextWindowSize({ w, h });
     ImGui::Begin("Post Processing"/*, nullptr, flags*/);
 
     // Using ImGui library to provide slide controllers for adjusting the filter options
     const float offset_x = 0;
-    const int offset_from_checkbox = 120;
-    float offset_y = 0;
-    float elements_margin = 45;
+    const int offset_from_checkbox = 105;
+    float offset_y = 45;
+    float elements_margin = 35;
     for (auto& filter : filters)
     {
         // Draw a checkbox per filter to toggle if it should be applied
         ImGui::SetCursorPos({ offset_x, offset_y });
         ImGui::PushStyleColor(ImGuiCol_CheckMark, { 40 / 255.f, 170 / 255.f, 90 / 255.f, 1 });
         bool tmp_value = filter.is_enabled;
-        ImGui::Checkbox(filter.filter_name.c_str(), &tmp_value);
+        if (ImGui::Checkbox(filter.filter_name.c_str(), &tmp_value))
+            g_settings.SetValue("PostProcessing", filter.filter_name + "_Enabled", tmp_value);
         filter.is_enabled = tmp_value;
         ImGui::PopStyleColor();
 
@@ -292,9 +119,13 @@ void render_ui(float w, float h, std::vector<filter_options>& filters)
         for (auto& option_slider_pair : filter.supported_options)
         {
             filter_slider_ui& slider = option_slider_pair.second;
-            if (slider.render({ offset_x + offset_from_checkbox, offset_y, w / 4 }, filter.is_enabled))
+            if (slider.render({ offset_x + offset_from_checkbox, offset_y, 240 }, filter.is_enabled))
             {
                 filter.filter.set_option(option_slider_pair.first, slider.value);
+                if (slider.is_int)
+                    g_settings.SetValue("PostProcessing", slider.name, (int) slider.value);
+                else
+                    g_settings.SetValue("PostProcessing", slider.name, slider.value);
             }
             offset_y += elements_margin;
         }
@@ -370,14 +201,6 @@ filter_options::filter_options(const std::string name, rs2::filter& flt) :
     filter(flt),
     is_enabled(true)
 {
-    const std::array<rs2_option, 5> possible_filter_options = {
-        RS2_OPTION_FILTER_MAGNITUDE,
-        RS2_OPTION_FILTER_SMOOTH_ALPHA,
-        RS2_OPTION_MIN_DISTANCE,
-        RS2_OPTION_MAX_DISTANCE,
-        RS2_OPTION_FILTER_SMOOTH_DELTA
-    };
-
     //Go over each filter option and create a slider for it
     for (rs2_option opt : possible_filter_options)
     {
@@ -402,4 +225,122 @@ filter_options::filter_options(filter_options&& other) :
     supported_options(std::move(other.supported_options)),
     is_enabled(other.is_enabled.load())
 {
+}
+
+void CPostProcessing::StartProcessing(rs2::pipeline& the_pipe)
+{
+    ppipe = &the_pipe;
+
+    processing_thread = new std::thread([&]() {
+        while (!stopped) //While application is running
+        {
+            rs2::frameset data = ppipe->wait_for_frames(); // Wait for next set of frames from the camera
+            rs2::frame depth_frame = data.get_depth_frame(); //Take the depth frame from the frameset
+            rs2::frame color_frame = data.get_color_frame();
+
+            if (!depth_frame) // Should not happen but if the pipeline is configured differently
+                return;       //  it might not provide depth and we don't want to crash
+
+            rs2::frame filtered = depth_frame; // Does not copy the frame, only adds a reference
+
+            /* Apply filters.
+            The implemented flow of the filters pipeline is in the following order:
+            1. apply decimation filter
+            2. apply threshold filter
+            3. transform the scene into disparity domain
+            4. apply spatial filter
+            5. apply temporal filter
+            6. revert the results back (if step Disparity filter was applied
+            to depth domain (each post processing block is optional and can be applied independantly).
+            */
+            bool revert_disparity = false;
+            for (auto&& filter : filters)
+            {
+                if (filter.is_enabled)
+                {
+                    filtered = filter.filter.process(filtered);
+                    if (filter.filter_name == disparity_filter_name)
+                    {
+                        revert_disparity = true;
+                    }
+                }
+            }
+            if (revert_disparity)
+            {
+                filtered = disparity_to_depth.process(filtered);
+            }
+
+            // Push filtered & original data to their respective queues
+            // Note, pushing to two different queues might cause the application to display
+            //  original and filtered pointclouds from different depth frames
+            //  To make sure they are synchronized you need to push them together or add some
+            //  synchronization mechanisms
+            filtered_data.enqueue(filtered);
+            original_data.enqueue(depth_frame);
+            color_data.enqueue(color_frame);
+        }
+    });
+
+}
+
+void CPostProcessing::UpdateData()
+{
+    update_data(original_data, colored_depth, original_points, original_pc, depth_state.tex, color_map);
+    update_data(filtered_data, colored_filtered, filtered_points, filtered_pc, filtered_state.tex, color_map);
+    update_data(color_data, color);
+}
+
+void CPostProcessing::RegisterSettings()
+{
+    for (auto& filter : filters)
+    {
+        auto& name = filter.filter_name;
+        g_settings.SetValue("PostProcessing", filter.filter_name + "_Enabled", filter.is_enabled);
+
+        for (auto& option_slider_pair : filter.supported_options)
+        {
+            filter_slider_ui& slider = option_slider_pair.second;
+            if (slider.is_int)
+                g_settings.SetValue("PostProcessing", slider.name, (int) slider.value);
+            else
+                g_settings.SetValue("PostProcessing", slider.name, slider.value);
+        }
+    }
+}
+
+void CPostProcessing::ImportSettings()
+{
+    for (auto& filter : filters)
+    {
+        auto& name = filter.filter_name;
+        filter.is_enabled = g_settings.GetValue("PostProcessing", filter.filter_name + "_Enabled", true);
+        
+        for (auto& option_slider_pair : filter.supported_options)
+        {
+            filter_slider_ui& slider = option_slider_pair.second;
+            slider.is_int;
+            float value = slider.value;
+            auto& option_name = slider.name;
+            slider.value = g_settings.GetValue("PostProcessing", slider.name, 0.0f);
+        }
+    }
+}
+
+void CPostProcessing::Reset()
+{
+    // Loop over filterDefaults structure and use it to reset the filters
+
+    for (auto& it : filterDefaults)
+    {
+        std::string key = it.first;
+        Default& def = it.second;
+
+        def.fo.filter.set_option(def.opt, def.value);                   // Set option in filter
+        def.fo.supported_options[def.opt].value = def.value;            // And also in the UI
+    }
+
+    for (auto& filter : filters)
+    {
+        filter.is_enabled = true;                                       // Enable all filters
+    }
 }

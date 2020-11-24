@@ -9,6 +9,7 @@
 #include "vendor/implot/implot.h"
 #include "vendor/implot/implot_internal.h"
 
+#include "Histograms.h"
 #include "Utilities.h"
 
 #include <iostream>
@@ -52,89 +53,84 @@ namespace MyPlotFunctions
 //
 //  Plots one channel of a color histogram.  Data is always an array of 256 longs.
 
-class CColorChannelHistogramPlot
-{
-public:
-	CColorChannelHistogramPlot(const char* name, float* data, size_t count = 256)
-		: m_pszName(name)
-		, m_pData(data)
-		, m_Count(count)
-		, m_nMin(0)
-		, m_nMax((int)count)
-		, m_strMinLabel("##")
-		, m_strMaxLabel("##")
-		, m_iCurrentYmax(0)
-	{
-		m_strLabel = name;
-		m_strLabel.append(" Histogram");
-
-		m_strMinLabel.append(name);
-		m_strMinLabel.append("min");
-
-		m_strMaxLabel.append(name);
-		m_strMaxLabel.append("max");
-
-		if (m_dPos[0] != 0) {
-			for (int i = 0; i < 256; i++) {
-				m_dPos[i] = i;
-			}
-		}
-
-		for (auto& val : m_LastYmaxes)
-			val = 0;
-	}
-
-	auto GetMin() { return m_nMin; }
-	auto GetMax() { return m_nMax; }
-
-	void Draw()                     // Draw the histogram using ImPlot/ImGui
-	{
-		float ymax = 0;
-		for (int i = 0; i < m_Count; i++)
-			if (m_pData[i] > ymax)
-				ymax = m_pData[i];
-
-		m_LastYmaxes[m_iCurrentYmax++] = ymax;
-		m_iCurrentYmax %= c_Ymaxes;
-
-		ymax = 0;
-		for (auto& y : m_LastYmaxes)
-			ymax += y;
-
-		ImPlot::SetNextPlotLimits(0.0, (double)m_Count, 0, ymax / c_Ymaxes, ImGuiCond_Always);
-		ImPlot::SetNextPlotTicksX(m_dPos, 1);
-		ImPlot::SetNextMarkerStyle(-1, -1, ImColor(255, 255, 0));
-
-		if (ImPlot::BeginPlot(m_strLabel.c_str(), "", "", ImVec2(-1, 0), 0, 0, 0))
-		{
-			MyPlotFunctions::PlotHist("", m_pData, (int)m_Count, m_nMin, m_nMax);
-			ImPlot::EndPlot();
-		}
-		ImGui::SliderInt(m_strMinLabel.c_str(), &m_nMin, 0, (int)m_Count - 1);
-		ImGui::SliderInt(m_strMaxLabel.c_str(), &m_nMax, 0, (int)m_Count - 1);
-
-	}
-
-protected:
-	static const int c_Ymaxes = 20;	// How many ymax values to average
-
-	const char* m_pszName;          // Channel name
-	float* m_pData;                 // Channel data - m_Count elements
-	float m_LastYmaxes[c_Ymaxes];	// Save last n ymax values for averaging
-	int m_iCurrentYmax;				// Index into LastYmaxes buffer
-	size_t m_Count;                 // # of data elements
-	int m_nMin;                     // Min selected value
-	int m_nMax;                     // Max selected value
-	static double m_dPos[256];         // X-Axis values
-
-	std::string m_strLabel;         // Chart label
-	std::string m_strMinLabel;      // Xmin label
-	std::string m_strMaxLabel;      // Xmax label
-};
-
 double CColorChannelHistogramPlot::m_dPos[256] = { 42 };               // Any non-zero value in element 0 means we need to init 
 
-void DoHistograms(const cv::Mat& image)
+
+CColorChannelHistogramPlot::CColorChannelHistogramPlot(const char* name, float* data, size_t count)
+	: m_pszName(name)
+	, m_pData(data)
+	, m_Count(count)
+	, m_nMin(0)
+	, m_nMax((int)count)
+	, m_strMinLabel("##")
+	, m_strMaxLabel("##")
+	, m_iCurrentYmax(0)
+{
+	m_strLabel = name;
+	m_strLabel.append(" Histogram");
+
+	m_strMinLabel.append(name);
+	m_strMinLabel.append("min");
+
+	m_strMaxLabel.append(name);
+	m_strMaxLabel.append("max");
+
+	if (m_dPos[0] != 0) {
+		for (int i = 0; i < 256; i++) {
+			m_dPos[i] = i;
+		}
+	}
+
+	for (auto& val : m_LastYmaxes)
+		val = 0;
+}
+
+void CColorChannelHistogramPlot::RegisterSettings()
+{
+	g_settings.SetValue("Histograms", m_strMinLabel, m_nMin);
+	g_settings.SetValue("Histograms", m_strMaxLabel, m_nMax);
+}
+
+void CColorChannelHistogramPlot::ImportSettings()
+{
+	m_nMin = g_settings.GetValue("Histograms", m_strMinLabel, 0);
+	m_nMax = g_settings.GetValue("Histograms", m_strMaxLabel, (int) m_Count);
+}
+
+void CColorChannelHistogramPlot::Draw()                     // Draw the histogram using ImPlot/ImGui
+{
+	if (!m_pData)
+		return;
+
+	float ymax = 0;
+	for (int i = 0; i < m_Count; i++)
+		if (m_pData[i] > ymax)
+			ymax = m_pData[i];
+
+	m_LastYmaxes[m_iCurrentYmax++] = ymax;
+	m_iCurrentYmax %= c_Ymaxes;
+
+	ymax = 0;
+	for (auto& y : m_LastYmaxes)
+		ymax += y;
+
+	ImPlot::SetNextPlotLimits(0.0, (double)m_Count, 0, ymax / c_Ymaxes, ImGuiCond_Always);
+	ImPlot::SetNextPlotTicksX(m_dPos, 1);
+	ImPlot::SetNextMarkerStyle(-1, -1, ImColor(255, 255, 0));
+
+	if (ImPlot::BeginPlot(m_strLabel.c_str(), "", "", ImVec2(-1, 0), 0, 0, 0))
+	{
+		MyPlotFunctions::PlotHist("", m_pData, (int)m_Count, m_nMin, m_nMax);
+		ImPlot::EndPlot();
+	}
+	if (ImGui::SliderInt(m_strMinLabel.c_str(), &m_nMin, 0, (int)m_Count - 1))
+		g_settings.SetValue("Histograms", m_strMinLabel, m_nMin);
+	if (ImGui::SliderInt(m_strMaxLabel.c_str(), &m_nMax, 0, (int)m_Count - 1))
+		g_settings.SetValue("Histograms", m_strMaxLabel, m_nMax);
+}
+
+
+void CHistograms::DoHistograms(const cv::Mat& image)
 {
 	cv::Mat hsvImage;
 	cv::cvtColor(image, hsvImage, cv::COLOR_RGB2HSV);
@@ -153,7 +149,6 @@ void DoHistograms(const cv::Mat& image)
 
 	bool uniform = true; bool accumulate = false;
 
-	static cv::Mat h_hist, s_hist, v_hist;
 
 	const int zero = 0;
 
@@ -162,10 +157,6 @@ void DoHistograms(const cv::Mat& image)
 	cv::calcHist(&hsvPlanes[2], 1, &zero, cv::Mat(), v_hist, 1, &histSizeSV, &rangesSV, uniform, accumulate);
 
 	s_hist.row(255) = 0;			// Not sure why I need this.  There's a spike in the last value....
-
-	static CColorChannelHistogramPlot cchpH("H", (float*)h_hist.ptr(), 180);
-	static CColorChannelHistogramPlot cchpS("S", (float*)s_hist.ptr());
-	static CColorChannelHistogramPlot cchpV("V", (float*)v_hist.ptr());
 
 	ImGui::Begin("HSV Histograms");
 	{
@@ -188,10 +179,6 @@ void DoHistograms(const cv::Mat& image)
 	cv::calcHist(&rgbPlanes[1], 1, &zero, cv::Mat(), g_hist, 1, &histSizeRGB, &rangesRGB, uniform, accumulate);
 	cv::calcHist(&rgbPlanes[2], 1, &zero, cv::Mat(), b_hist, 1, &histSizeRGB, &rangesRGB, uniform, accumulate);
 
-	static CColorChannelHistogramPlot cchpR("R", (float*)r_hist.ptr());
-	static CColorChannelHistogramPlot cchpG("G", (float*)g_hist.ptr());
-	static CColorChannelHistogramPlot cchpB("B", (float*)b_hist.ptr());
-
 	ImGui::Begin("RGB Histograms");
 	{
 		cchpR.Draw();
@@ -201,16 +188,15 @@ void DoHistograms(const cv::Mat& image)
 	}
 #endif
 	// Filter the color image by the HSV (and possibly RGB) values
+	// ******************  BUGBUG  *********** RGB not done **************
 
 	{
-		cv::Mat mask;
-
 		if (cchpH.GetMax() < cchpH.GetMin())
 		{
 			// Special handling for Hmax < Hmin because H coordinate wraps around
 			//
 			// We need two masks.  One for the H channel and another for the S and V channels.
-			// We then bitwise AND the the two masks for the final mask
+			// We then bitwise AND the the two masks for the final m_maskHSV
 			//
 			// To compute the Hmask, we swap the max and min in the call to inRange and then invert the result
 
@@ -220,18 +206,57 @@ void DoHistograms(const cv::Mat& image)
 
 			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMax(), 0, 0), cv::Scalar(cchpH.GetMin(), 256, 256), maskH);
 			cv::bitwise_not(maskH, maskH);
-			cv::bitwise_and(maskH, maskSV, mask);
+			cv::bitwise_and(maskH, maskSV, m_maskHSV);
 
 		}
 		else
 		{
 			// Normal Handling for Hmax >= Hmin
 
-			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMin(), cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(cchpH.GetMax(), cchpS.GetMax(), cchpV.GetMax()), mask);
+			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMin(), cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(cchpH.GetMax(), cchpS.GetMax(), cchpV.GetMax()), m_maskHSV);
 		}
 
 		cv::Mat dst;
-		cv::bitwise_and(image, image, dst, mask);
+		cv::bitwise_and(image, image, dst, m_maskHSV);
 		memcpy(image.data, dst.data, dst.step[0] * dst.rows);
 	}
+}
+
+void CHistograms::RegisterSettings()
+{
+	cchpH.RegisterSettings();
+	cchpS.RegisterSettings();
+	cchpV.RegisterSettings();
+
+#ifdef RGB_HIST
+	cchpR.RegisterSettings();
+	cchpG.RegisterSettings();
+	cchpB.RegisterSettings();
+#endif
+}
+
+void CHistograms::ImportSettings()
+{
+	cchpH.ImportSettings();
+	cchpS.ImportSettings();
+	cchpV.ImportSettings();
+
+#ifdef RGB_HIST
+	cchpR.ImportSettings();
+	cchpG.ImportSettings();
+	cchpB.ImportSettings();
+#endif
+}
+
+void CHistograms::Reset()
+{
+	cchpH.Reset();
+	cchpS.Reset();
+	cchpV.Reset();
+
+#ifdef RGB_HIST
+	cchpR.Reset();
+	cchpG.Reset();
+	cchpB.Reset();
+#endif
 }

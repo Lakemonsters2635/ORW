@@ -1,34 +1,86 @@
 // ORW.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
+//#define _CRTDBG_MAP_ALLOC
+//#include <stdlib.h>
+//#include <crtdbg.h>
+
 
 #include <gl/glew.h>
 #include <GLFW/glfw3.h>
 #include "vendor/imgui/imgui_impl_glfw.h"
 #include "vendor/imgui/imgui_impl_opengl3.h"
-#include "vendor/RealSense/example.hpp"
+#include "vendor/RealSense/rs_example.h"
 #include "vendor/implot/implot_demo.cpp"
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/types_c.h>
-#include "DisplayFrame.hpp"						// Because functions in this file rely on example.hpp, we must
-												// include it instead of adding it to the project
 
+#include "PointCloudDisplay.h"
+#include "CRANSAC.h"
+#include "CSettings.h"
+#include "Histograms.h"
+
+//#include <pcl/ModelCoefficients.h>
 
 #include "Utilities.h"
 
 #include <iostream>
+#include <chrono>
 
 #include "Post Processing.h"
 
 //#define	RGB_HIST			// Define this if you want RGB histograms to be calculated
-
-CPostProcessing pp;
-
 
 static void glfw_error_callback(int error, const char* description)
 {
 	fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
 
+// class to calculate frame rate.
+// Can average over multiple frames
+
+class FrameRate
+{
+public:
+
+	FrameRate(int nFrames = 10)
+		: m_nFrames(nFrames)
+	{
+		frames = new std::chrono::duration<double>[m_nFrames];
+	}
+
+	~FrameRate()
+	{
+		if (frames)
+			delete frames;
+	}
+
+	void NextFrame()
+	{
+		auto t = std::chrono::high_resolution_clock::now();
+		auto delta = t - m_prev;
+		m_prev = t;
+
+		frames[m_nCurrFrame++] = delta;
+		m_nCurrFrame %= m_nFrames;
+	}
+
+	auto GetFrameRate()
+	{
+		auto delta = frames[0];
+		for (int i = 1; i < m_nFrames; i++)
+			delta += frames[i];
+
+		delta /= m_nFrames;
+
+		return 1 / delta.count();
+	}
+
+private:
+	int m_nFrames;
+	std::chrono::duration<double>* frames = nullptr;
+	int m_nCurrFrame = 0;
+	std::chrono::high_resolution_clock::time_point m_prev = std::chrono::high_resolution_clock::now();
+};
 
 int main()
 {
@@ -51,7 +103,7 @@ int main()
 		return 1;
 
 	// Create and initialize GUI related objects
-	window app(1280, 720, "RealSense Align Example"); // Simple window handling
+	window app(1792, 1008, "RealSense Align Example"); // Simple window handling
  //   glfwMaximizeWindow(app);
 
 	// Initialize OpenGL loader
@@ -79,18 +131,27 @@ int main()
 	ImGui_ImplGlfw_InitForOpenGL(app, true);
 	ImGui_ImplOpenGL3_Init(/*glsl_version*/);
 
-	bool show_demo_window = true;
-	bool show_another_window = false;
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
+	CPostProcessing pp;
+	pp.StartProcessing(pipe);
+
+	PointCloudDisplay pc("Point Cloud"), fpc("Filtered Point Cloud");
+	FrameRate fr;
+	CRANSAC ransac;
+	CHistograms hist;
+
+	int nFrames = 0;
 
 	// Main loop
-	while (!glfwWindowShouldClose(app))
+	while (!glfwWindowShouldClose(app)/* && nFrames++ < 100*/)
 	{
-		rs2::frameset data = pipe.wait_for_frames();    // Wait for next set of frames from the camera
-		auto depth = data.get_depth_frame();
-		auto color = data.get_color_frame();
-		auto colorized_depth = color_map.colorize(depth);
+		fr.NextFrame();
+		auto rate = fr.GetFrameRate();
+
+		glfwMakeContextCurrent((GLFWwindow * )app);
+
+		pp.UpdateData();
 
 		// Poll and handle events (inputs, window resize, etc.)
 		// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -104,26 +165,109 @@ int main()
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
+		//ImGui::ShowDemoWindow();
+
 		//ImPlot::ShowDemoWindow();
 
-		// Create OpenCV matrix of size (w,h) from the colorized depth data
-		auto width = color.get_width();
-		auto height = color.get_height();
-		uint8_t* pixels = (uint8_t*)color.get_data();
+		if (ImGui::BeginMainMenuBar())
+		{
+			if (ImGui::BeginMenu("File"))
+			{
+				ImGui::MenuItem("(demo menu)", NULL, false, false);
+				if (ImGui::MenuItem("New"))
+				{
+					g_settings.New();
+					pp.Reset();
+					hist.Reset();
 
-		auto widthDepth = depth.get_width();
-		auto heightDepth = depth.get_height();
+					pp.RegisterSettings();
+					hist.RegisterSettings();
+				}
+				if (ImGui::MenuItem("Open", "Ctrl+O"))
+				{
+					g_settings.Load("");
 
-		cv::Mat image(cv::Size(width, height), CV_8UC3, (void*)color.get_data(), cv::Mat::AUTO_STEP);
-		DoHistograms(image);
+					pp.Reset();
+					hist.Reset();
 
-		pp.RenderUI(1280, 720);
+					pp.ImportSettings();
+					hist.ImportSettings();
+				}
+				if (ImGui::MenuItem("Save", "Ctrl+S"))
+				{
+					g_settings.Save();
+					//pp.SaveSettings();
+				}
+				if (ImGui::BeginMenu("Open Recent"))
+				{
+					ImGui::MenuItem("fish_hat.c");
+					ImGui::MenuItem("fish_hat.inl");
+					ImGui::MenuItem("fish_hat.h");
+					//if (ImGui::BeginMenu("More.."))
+					//{
+					//	ImGui::MenuItem("Hello");
+					//	ImGui::MenuItem("Sailor");
+					//}
+					ImGui::EndMenu();
+				}
+				ImGui::EndMenu();
+			}
+			if (ImGui::BeginMenu("Edit"))
+			{
+				if (ImGui::MenuItem("Undo", "CTRL+Z")) {}
+				if (ImGui::MenuItem("Redo", "CTRL+Y", false, false)) {}  // Disabled item
+				ImGui::Separator();
+				if (ImGui::MenuItem("Cut", "CTRL+X")) {}
+				if (ImGui::MenuItem("Copy", "CTRL+C")) {}
+				if (ImGui::MenuItem("Paste", "CTRL+V")) {}
+				ImGui::EndMenu();
+			}
+			ImGui::EndMainMenuBar();
+		}
 
-		DisplayFrame(color, "Color");
-		DisplayFrame(colorized_depth, "Depth");
+		ImGui::Begin("Stats");
+		ImGui::Text("Frame Rate: %.1f fps", rate);
+		ImGui::End();
+
+		// If we have a new frame, process it and update the UI
+
+		// Each call to DisplayFrame needs a unique texture.
+		// The scope of the RealSense texture needs to extend to past the
+		// call to ImGui::Render(), but then needs to end before
+		// starting another frame.  That makes sure the contained OpenGL
+		// texture is deleted (by ~texture()) to avoid memory leaks.
+		// IMPORTANT: *I* added the destructor to texture.  If you update
+		// rs_example.* (from Intel's example.hpp), you may need to put
+		// back the destructor.
+
+		texture color_texture;
+		texture depth_texture;
+		texture filtered_texture;
+
+		if (pp.color)
+		{
+			// Create OpenCV matrix of size (w,h) from the colorized depth data
+			auto width = pp.color.as<rs2::video_frame>().get_width();
+			auto height = pp.color.as<rs2::video_frame>().get_height();
+			uint8_t* pixels = (uint8_t*)pp.color.get_data();
+
+			auto widthDepth = pp.colored_depth.as<rs2::video_frame>().get_width();
+			auto heightDepth = pp.colored_depth.as<rs2::video_frame>().get_height();
+
+			cv::Mat image(cv::Size(width, height), CV_8UC3, (void*)pp.color.get_data(), cv::Mat::AUTO_STEP);
+			hist.DoHistograms(image);
+
+			DisplayFrame(pp.color, "Color", color_texture);
+			DisplayFrame(pp.colored_depth, "Depth", depth_texture);
+			DisplayFrame(pp.colored_filtered, "Filtered Depth", filtered_texture);
+		}
+
+		pp.RenderUI();
+		ransac.RenderUI();
 
 		// Rendering
 		ImGui::Render();
+
 		int display_w, display_h;
 		glfwGetFramebufferSize(app, &display_w, &display_h);
 		glViewport(0, 0, display_w, display_h);
@@ -132,7 +276,13 @@ int main()
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		glfwSwapBuffers(app);
+
+		pc.DisplayPointCloud(pp.original_points);
+		fpc.DisplayPointCloud(pp.filtered_points);
+
 	}
+
+	pp.Stop();
 
 	// Cleanup
 	ImGui_ImplOpenGL3_Shutdown();
@@ -142,5 +292,6 @@ int main()
 	glfwDestroyWindow(app);
 	glfwTerminate();
 
+//	_CrtDumpMemoryLeaks();
 	return 0;
 }
