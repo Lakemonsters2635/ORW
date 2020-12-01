@@ -433,7 +433,9 @@ int main(int argc, char** argv)
 		glfw_state original_view_orientation{ 0, 0 };
 		//draw_pointcloud(w / 3.0, h / 3.0, original_view_orientation, pp.filtered_points);
 
+		ransac.Lock();
 		draw_pointcloud(w, h, original_view_orientation, ransac.GetLayers());
+		ransac.Unlock();
 
 		glfwSwapBuffers(app);
 

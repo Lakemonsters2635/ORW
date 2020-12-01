@@ -186,21 +186,21 @@ bool CRANSAC::FindFeatures(const rs2::points& rs2_points)
 							break;
 						}
 
-						pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_p(new pcl::PointCloud<pcl::PointXYZ>);
+						pcl::PointCloud<pcl::PointXYZ>::Ptr cloudExtracted(new pcl::PointCloud<pcl::PointXYZ>);
 
 						// Extract the inliers
 						extract.setInputCloud(workingPointCloud);
 						extract.setIndices(inliers);
 						extract.setNegative(false);
-						extract.filter(*cloud_p);
+						extract.filter(*cloudExtracted);
 
-						XPRINT("PointCloud representing the " << strModelName << " component: " << cloud_p->width * cloud_p->height << std::endl);
-						//ConvertToSeconds(liExtract.QuadPart - liStartExtract.QuadPart), strModelName, cloud_p->width * cloud_p->height);
+						XPRINT("PointCloud representing the " << strModelName << " component: " << cloudExtracted->width * cloudExtracted->height << std::endl);
+						//ConvertToSeconds(liExtract.QuadPart - liStartExtract.QuadPart), strModelName, cloudExtracted->width * cloudExtracted->height);
 
 						XPRINT("Model Coefficients:\n");
 						XPRINT(*coefficients);
 
-						feature_ptr p = new CRANSAC_FEATURE(cloud_p);
+						feature_ptr p(new CRANSAC_FEATURE(cloudExtracted));
 						p->m_Model = sacModel;
 						pcl_model_coefficients_ptr c(new pcl::ModelCoefficients(*coefficients));
 						p->m_pCoefficients = c;
@@ -227,11 +227,11 @@ bool CRANSAC::FindFeatures(const rs2::points& rs2_points)
 							// as the average Z value of all the points in the circle cloud.
 
 						case pcl::SACMODEL_CIRCLE2D:
-							for (auto& p : *cloud_p)
+							for (auto& p : *cloudExtracted)
 							{
 								fDistance += p.z;
 							}
-							fDistance /= cloud_p->size();
+							fDistance /= cloudExtracted->size();
 							XPRINT("Average distance to circle: " << fDistance << "m (" << fDistance * INCHES_PER_METER << " in)\n");
 							break;
 
@@ -426,21 +426,21 @@ void CRANSAC::ShowConeAngle()
 
 void CRANSAC::ShowResultDistance(int nLayer)
 {
-	auto d = m_FoundFeatures[nLayer]->m_pCoefficients->values[3];
+	auto d = m_DisplayFeatures[nLayer]->m_pCoefficients->values[3];
 	auto color = LayerColors[nLayer];
 	ImGui::TextColored(IM_COLOR(color), "Distance: %5.2f m    (%5.1f in)", d, d * INCHES_PER_METER);
 }
 
 void CRANSAC::ShowResultAngle(int nLayer)
 {
-	auto a = Angle(*m_FoundFeatures[nLayer]->m_pCoefficients);
+	auto a = Angle(*m_DisplayFeatures[nLayer]->m_pCoefficients);
 	auto color = LayerColors[nLayer];
 	ImGui::TextColored(IM_COLOR(color), "Angle:    %5.2f rad  (%5.1f deg)", a, a* DEGREES_PER_RADIAN);
 }
 
 void CRANSAC::ShowResultDistanceXZ(int nLayer)
 {
-	auto d = DistanceXZ(*m_FoundFeatures[nLayer]->m_pCoefficients);
+	auto d = DistanceXZ(*m_DisplayFeatures[nLayer]->m_pCoefficients);
 	auto color = LayerColors[nLayer];
 	ImGui::TextColored(IM_COLOR(color), "Distance: %5.2f m    (%5.1f in)", d, d * INCHES_PER_METER);
 }
@@ -448,11 +448,11 @@ void CRANSAC::ShowResultDistanceXZ(int nLayer)
 void CRANSAC::ShowResultAvgDistance(int nLayer)
 {
 	float fDistance = 0.0f;
-	for (auto& p : *m_FoundFeatures[nLayer]->cloud)
+	for (auto& p : *m_DisplayFeatures[nLayer]->cloud)
 	{
 		fDistance += p.z;
 	}
-	fDistance /= m_FoundFeatures[nLayer]->cloud->size();
+	fDistance /= m_DisplayFeatures[nLayer]->cloud->size();
 
 	auto color = LayerColors[nLayer];
 	ImGui::TextColored(IM_COLOR(color), "Distance: %5.2f m    (%5.1f in)", fDistance, fDistance * INCHES_PER_METER);
@@ -530,11 +530,11 @@ std::ostream& operator<<(std::ostream os, const CRANSAC_FEATURE feature)
 		// as the average Z value of all the points in the circle cloud.
 
 	case pcl::SACMODEL_CIRCLE2D:
-		//for (auto& p : *cloud_p)
+		//for (auto& p : *cloudExtracted)
 		//{
 		//	fDistance += p.z;
 		//}
-		//fDistance /= cloud_p->size();
+		//fDistance /= cloudExtracted->size();
 		sprintf_s(Buffer, sizeof(Buffer), "NEED TO UNCOMMENT CODE: Average distance to circle: %.2f (%.1f in)\n", fDistance, fDistance * INCHES_PER_METER);
 		break;
 

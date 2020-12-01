@@ -14,15 +14,17 @@
 #define IM_COLOR(c)	{ c.r/255.0f, c.g/255.0f, c.b/255.0f, 1.0f }
 
 
-struct CRANSAC_FEATURE
+class CRANSAC_FEATURE
 {
+public:
 	CRANSAC_FEATURE(pcl_ptr p) { cloud = p; }
+	//~CRANSAC_FEATURE() { delete cloud; }
 	pcl_ptr	cloud;
 	pcl::SacModel	m_Model;
 	pcl_model_coefficients_ptr m_pCoefficients;
 };
 
-using feature_ptr = CRANSAC_FEATURE*;
+using feature_ptr = std::shared_ptr<CRANSAC_FEATURE>;
 
 //int operator<(const feature_ptr& p1, const feature_ptr& p2)
 //{
@@ -47,11 +49,14 @@ public:
 	bool FindFeatures(const rs2::points& rs2_points);
 	const std::vector<feature_ptr>& GetLayers() { return m_DisplayFeatures;  }
 	bool IsBusy() { return m_bBusy; }
-	bool Stop()
+	void Stop()
 	{
 		m_bStop = true;
+		std::cerr << "Shutting down RANSAC: " << processing_thread->get_id() << std::endl;
 		processing_thread->join();			// Wait for thread to exit.
 	}
+	void Lock() { m_DisplayUpdateLock.lock(); }
+	void Unlock() { m_DisplayUpdateLock.unlock(); }
 
 	void RenderUI();
 	void ShowRadiusLimits();
