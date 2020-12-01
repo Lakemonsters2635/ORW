@@ -231,6 +231,7 @@
     <ClInclude Include="CORWFilter.h" />
     <ClInclude Include="CRANSAC.h" />
     <ClInclude Include="CSettings.h" />
+    <ClInclude Include="DisplayFrame.h" />
     <ClInclude Include="Histograms.h" />
     <ClInclude Include="PCLUtils.h" />
     <ClInclude Include="PointCloudDisplay.h" />

@@ -13,12 +13,6 @@ class window;
 #define INCHES_PER_METER	39.37
 #define	DEGREES_PER_RADIAN	(180.0/3.14159265358)
 
-void FrameToTexture(rs2::frame& frame, texture& frame_texture);
-void DisplayTexture(const char* Title, texture& frame_texture);
-
-void DisplayTriangle2();
-void DisplayTriangle3(float xSize, float ySize, float z);
-
 
 extern CSettings g_settings;
 

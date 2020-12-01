@@ -113,5 +113,8 @@
     <ClInclude Include="all_includes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DisplayFrame.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

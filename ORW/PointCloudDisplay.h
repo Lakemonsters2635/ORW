@@ -15,10 +15,10 @@ struct byte3
 extern byte3 LayerColors[N_COLORS];
 
 
-class PointCloudDisplay
+class CPointCloudDisplay
 {
 public:
-	PointCloudDisplay(const char* szTitle);
+	CPointCloudDisplay(const char* szTitle);
 
 	void DisplayPointCloud(rs2::points& points);
 	void DisplayPointCloud(const std::vector <feature_ptr>& features);

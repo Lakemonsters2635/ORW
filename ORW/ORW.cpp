@@ -11,6 +11,7 @@
 #include "CHSVFilter.h"
 #include "CORWFilter.h"
 #include "CFileDlg.h"
+#include "DisplayFrame.h"
 
 //#include <pcl/ModelCoefficients.h>
 
@@ -193,6 +194,7 @@ int main(int argc, char** argv)
 	pp.StartProcessing(*pipe);
 
 	//PointCloudDisplay pc("Point Cloud"), fpc("Filtered Point Cloud"), featurePC("Features Detected");
+	//CPointCloudDisplay pcdRANSAC("RANSAC");			// Used to display RANSAC output
 
 	if (!strOrwFile.empty())
 	{
@@ -208,9 +210,9 @@ int main(int argc, char** argv)
 
 	int nFrames = 0;
 
-	texture color_texture;
-	texture depth_texture;
-	texture filtered_texture;
+	CDisplayFrame colorFrame("Color", true);			// This one has a color picker
+	CDisplayFrame depthFrame("Depth");
+	CDisplayFrame filteredFrame("Filtered Depth");
 
 	// Main loop
 	while (!glfwWindowShouldClose(app)/* && nFrames++ < 100*/)
@@ -364,35 +366,30 @@ int main(int argc, char** argv)
 
 		// If we have a new frame, process it and update the UI
 
-		// Each call to DisplayFrame needs a unique texture.
-		// The scope of the RealSense texture needs to extend to past the
-		// call to ImGui::Render(), but then needs to end before
-		// starting another frame.  That makes sure the contained OpenGL
-		// texture is deleted (by ~texture()) to avoid memory leaks.
-		// IMPORTANT: *I* added the destructor to texture.  If you update
-		// rs_example.* (from Intel's example.hpp), you may need to put
-		// back the destructor.
-
 		if (pp.color)
 		{
-			FrameToTexture(pp.color, color_texture);
-			FrameToTexture(pp.colored_depth, depth_texture);
-			FrameToTexture(pp.colored_filtered, filtered_texture);
+			colorFrame.FrameToTexture(pp.color);
+			depthFrame.FrameToTexture(pp.colored_depth);
+			filteredFrame.FrameToTexture(pp.colored_filtered);
 		}
-
-		DisplayTexture("Color", color_texture);
-		DisplayTexture("Depth", depth_texture);
-		DisplayTexture("Filtered Depth", filtered_texture);
 
 		if (ransac.FindFeatures(pp.filtered_points))
 		{
 			fr.NextFrame();
 		}
 
+		float x, y;
+		if (colorFrame.IsClicked(x, y))
+			std::cerr << "Clicked at " << x << ", " << y << std::endl;
+
 		auto rate = fr.GetFrameRate();
 		ImGui::Begin("Stats");
 		ImGui::Text("Frame Rate: %.1f fps", rate);
 		ImGui::End();
+
+		colorFrame.RenderUI();
+		depthFrame.RenderUI();
+		filteredFrame.RenderUI();
 
 		pp.RenderUI();
 		ransac.RenderUI();
@@ -434,6 +431,7 @@ int main(int argc, char** argv)
 		//draw_pointcloud(w / 3.0, h / 3.0, original_view_orientation, pp.filtered_points);
 
 		ransac.Lock();
+//		pcdRANSAC.DisplayPointCloud(ransac.GetLayers());
 		draw_pointcloud(w, h, original_view_orientation, ransac.GetLayers());
 		ransac.Unlock();
 

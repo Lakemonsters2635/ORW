@@ -16,7 +16,7 @@ byte3 LayerColors[N_COLORS] = {
 	{ 240, 12, 208 }
 };
 
-void PointCloudDisplay::draw_pointcloud(const std::vector <feature_ptr>& features)
+void CPointCloudDisplay::draw_pointcloud(const std::vector <feature_ptr>& features)
 {
 	::draw_pointcloud(win.width(), win.height(), app_state, features);
 }
@@ -103,7 +103,7 @@ void draw_pointcloud(float width, float height, glfw_state app_state, const std:
 
 
 
-PointCloudDisplay::PointCloudDisplay(const char* szTitle)
+CPointCloudDisplay::CPointCloudDisplay(const char* szTitle)
 	: win(640, 480, szTitle)
 	, app_state(0, 0)
 {
@@ -112,7 +112,7 @@ PointCloudDisplay::PointCloudDisplay(const char* szTitle)
 }
 
 
-void PointCloudDisplay::DisplayPointCloud(rs2::points& points)
+void CPointCloudDisplay::DisplayPointCloud(rs2::points& points)
 {
 	auto oldCTX = glfwGetCurrentContext();
 	glfwMakeContextCurrent((GLFWwindow*)win);
@@ -130,7 +130,7 @@ void PointCloudDisplay::DisplayPointCloud(rs2::points& points)
 
 
 
-void PointCloudDisplay::DisplayPointCloud(const std::vector <feature_ptr>& features)
+void CPointCloudDisplay::DisplayPointCloud(const std::vector <feature_ptr>& features)
 {
 	auto oldCTX = glfwGetCurrentContext();
 	glfwMakeContextCurrent((GLFWwindow*)win);
