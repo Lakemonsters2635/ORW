@@ -1,30 +1,20 @@
 // ORW.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
-//#define _CRTDBG_MAP_ALLOC
-//#include <stdlib.h>
-//#include <crtdbg.h>
+#include "all_includes.h"
 
-
-#include <gl/glew.h>
-#include <GLFW/glfw3.h>
-#include "vendor/imgui/imgui_impl_glfw.h"
-#include "vendor/imgui/imgui_impl_opengl3.h"
-#include "vendor/RealSense/rs_example.h"
 #include "vendor/implot/implot_demo.cpp"
-#include <opencv2/opencv.hpp>
-#include <opencv2/imgproc/types_c.h>
 
 #include "PointCloudDisplay.h"
 #include "CRANSAC.h"
 #include "CSettings.h"
 #include "Histograms.h"
+#include "CHSVFilter.h"
+#include "CORWFilter.h"
+#include "CFileDlg.h"
 
 //#include <pcl/ModelCoefficients.h>
 
-#include "Utilities.h"
-
-#include <iostream>
-#include <chrono>
+#include "PCLUtils.h"
 
 #include "Post Processing.h"
 
@@ -82,16 +72,68 @@ private:
 	std::chrono::high_resolution_clock::time_point m_prev = std::chrono::high_resolution_clock::now();
 };
 
-int main()
+int main(int argc, char** argv)
 {
+	std::string strBagFile, strOrwFile;
+
+	while (--argc)
+	{
+		std::string test(argv[1]);
+		std::for_each(test.begin(), test.end(), [](char& c) {
+			c = ::toupper(c);
+		});
+		if (test.find(".BAG") != std::string::npos)
+			strBagFile = argv[1];
+		if (test.find(".ORW") != std::string::npos)
+			strOrwFile = argv[1];
+		argv++;
+	}
+
 	// Init the RealSense library and camera
 
+	rs2::context ctx;            // Create librealsense context for managing devices
+	auto devices = ctx.query_devices();
+	std::string bagFilename;
+
+	std::vector<rs2::device> depthCameras;
+
+	for (auto&& dev : devices)
+	{
+		std::string strCameraName(dev.get_info(RS2_CAMERA_INFO_NAME));
+		std::string strCameraSerialNumber(dev.get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
+
+		depthCameras.push_back(dev);
+	}
+
+	int nCurrentCamera = 0;										// Always start w/ 1st camera found
+
 	// Create a pipeline to easily configure and start the camera
-	rs2::pipeline pipe;
+	auto pipe = std::make_shared<rs2::pipeline>();
+	//rs2::pipeline pipe(ctx);
 	rs2::config cfg;
+
+	if (!strBagFile.empty())
+	{
+		cfg.enable_device_from_file(strBagFile);
+	}
+	else if (depthCameras.size() == 0)								// Read from file
+	{
+		CFileDlg dlg("RealSense Recorded Data\0*.bag\0", "bag");
+		strBagFile = dlg.GetOpenFileName();
+		if (strBagFile.empty())
+		{
+			std::cerr << "No cameras and no input file\n";
+		}
+		cfg.enable_device_from_file(strBagFile);
+	}
+	else
+	{
+		cfg.enable_device(depthCameras[nCurrentCamera].get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
+	}
+
 	cfg.enable_stream(RS2_STREAM_DEPTH);
 	cfg.enable_stream(RS2_STREAM_COLOR);
-	pipe.start(cfg);
+	pipe->start(cfg);
 
 	// Declare depth colorizer for pretty visualization of depth data
 	rs2::colorizer color_map;
@@ -103,8 +145,8 @@ int main()
 		return 1;
 
 	// Create and initialize GUI related objects
-	window app(1792, 1008, "RealSense Align Example"); // Simple window handling
- //   glfwMaximizeWindow(app);
+	window app(1792, 1008, "Lake Monsters Object Recognition Workbench"); // Simple window handling
+    glfwMaximizeWindow(app);
 
 	// Initialize OpenGL loader
 	bool err = glewInit() != GLEW_OK;
@@ -134,24 +176,49 @@ int main()
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
 	CPostProcessing pp;
-	pp.StartProcessing(pipe);
-
-	PointCloudDisplay pc("Point Cloud"), fpc("Filtered Point Cloud");
 	FrameRate fr;
 	CRANSAC ransac;
+
+	// Filter that calculates histograms
+
 	CHistograms hist;
+	pp.AddFilter("Hist", hist);
+
+	// Filter that applies HSV mask
+
+	CHSVFilter hsvFilter;
+	pp.AddFilter("HSV", hsvFilter);
+	hsvFilter.SetOption(CORWFilter::COF_OPTION_HSVMASK, &hist.GetMaskHSV());
+
+	pp.StartProcessing(*pipe);
+
+	//PointCloudDisplay pc("Point Cloud"), fpc("Filtered Point Cloud"), featurePC("Features Detected");
+
+	if (!strOrwFile.empty())
+	{
+		g_settings.Load(strOrwFile);
+		pp.Reset();
+		hist.Reset();
+		ransac.Reset();
+
+		pp.ImportSettings();
+		hist.ImportSettings();
+		ransac.ImportSettings();
+	}
 
 	int nFrames = 0;
+
+	texture color_texture;
+	texture depth_texture;
+	texture filtered_texture;
 
 	// Main loop
 	while (!glfwWindowShouldClose(app)/* && nFrames++ < 100*/)
 	{
-		fr.NextFrame();
-		auto rate = fr.GetFrameRate();
-
 		glfwMakeContextCurrent((GLFWwindow * )app);
 
-		pp.UpdateData();
+//		if (!ransac.IsBusy())							// Needs to accomodate *all* analysis modules
+			pp.UpdateData();
 
 		// Poll and handle events (inputs, window resize, etc.)
 		// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -163,6 +230,7 @@ int main()
 		// Start the Dear ImGui frame
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
+
 		ImGui::NewFrame();
 
 		//ImGui::ShowDemoWindow();
@@ -173,7 +241,7 @@ int main()
 		{
 			if (ImGui::BeginMenu("File"))
 			{
-				ImGui::MenuItem("(demo menu)", NULL, false, false);
+				//ImGui::MenuItem("(demo menu)", NULL, false, false);
 				if (ImGui::MenuItem("New"))
 				{
 					g_settings.New();
@@ -189,13 +257,20 @@ int main()
 
 					pp.Reset();
 					hist.Reset();
+					ransac.Reset();
 
 					pp.ImportSettings();
 					hist.ImportSettings();
+					ransac.ImportSettings();
 				}
 				if (ImGui::MenuItem("Save", "Ctrl+S"))
 				{
 					g_settings.Save();
+					//pp.SaveSettings();
+				}
+				if (ImGui::MenuItem("Save As...", ""))
+				{
+					g_settings.SaveAs();
 					//pp.SaveSettings();
 				}
 				if (ImGui::BeginMenu("Open Recent"))
@@ -212,22 +287,80 @@ int main()
 				}
 				ImGui::EndMenu();
 			}
-			if (ImGui::BeginMenu("Edit"))
+			if (ImGui::BeginMenu("Sources"))
 			{
-				if (ImGui::MenuItem("Undo", "CTRL+Z")) {}
-				if (ImGui::MenuItem("Redo", "CTRL+Y", false, false)) {}  // Disabled item
-				ImGui::Separator();
-				if (ImGui::MenuItem("Cut", "CTRL+X")) {}
-				if (ImGui::MenuItem("Copy", "CTRL+C")) {}
-				if (ImGui::MenuItem("Paste", "CTRL+V")) {}
+				for (auto i=0; i< depthCameras.size(); i++)
+				{
+					auto cam = depthCameras[i];
+					if (ImGui::MenuItem(cam.get_info(RS2_CAMERA_INFO_NAME), "", nCurrentCamera == i))
+					{
+						pp.StopProcessing();
+
+						nCurrentCamera = i;
+
+						pipe->stop(); // Stop streaming with default configuration
+						pipe = std::make_shared<rs2::pipeline>();
+						rs2::config cfg;
+						cfg.enable_device(depthCameras[nCurrentCamera].get_info(RS2_CAMERA_INFO_SERIAL_NUMBER));
+						cfg.enable_stream(RS2_STREAM_DEPTH);
+						cfg.enable_stream(RS2_STREAM_COLOR);
+						pipe->start(cfg);
+						pp.StartProcessing(*pipe);
+
+						//pipe->start(cfg); //File will be opened in read mode at this point
+						//device = pipe->get_active_profile().get_device();
+
+					}
+				}
+				if (ImGui::MenuItem("Read from File", nCurrentCamera == -1 ? bagFilename.c_str() : "", nCurrentCamera == -1))
+				{
+					char szDir[MAX_PATH + 1];
+					::GetCurrentDirectoryA(MAX_PATH + 1, szDir);
+
+					OPENFILENAMEA ofn;                      // common dialog box structure
+					char szFile[MAX_PATH + 1] = { 0 };
+
+					// Initialize OPENFILENAME
+					ZeroMemory(&ofn, sizeof(ofn));
+					ofn.lStructSize = sizeof(ofn);
+					ofn.hwndOwner = NULL;
+					ofn.lpstrFile = szFile;
+					ofn.nMaxFile = MAX_PATH + 1;
+					ofn.lpstrFilter = "RealSense Recorded Data\0*.bag\0";
+					ofn.nFilterIndex = 1;
+					ofn.lpstrFileTitle = NULL;
+					ofn.nMaxFileTitle = 0;
+					ofn.lpstrInitialDir = NULL;
+					ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+					ofn.lpstrDefExt = "bag";
+					ofn.lpstrInitialDir = szDir;
+
+					if (GetOpenFileNameA(&ofn))
+					{
+						pp.StopProcessing();
+
+						nCurrentCamera = -1;
+						bagFilename = ofn.lpstrFile;
+
+						pipe->stop(); // Stop streaming with default configuration
+						pipe = std::make_shared<rs2::pipeline>();
+						rs2::config cfg;
+						cfg.enable_device_from_file(ofn.lpstrFile);
+						pipe->start(cfg);
+						pp.StartProcessing(*pipe);
+					}
+				}
 				ImGui::EndMenu();
+			}
+			if (ImGui::MenuItem(pp.IsPaused() ? "Resume" : "Pause"))
+			{
+				if (pp.IsPaused())
+					pp.Continue();
+				else
+					pp.Pause();
 			}
 			ImGui::EndMainMenuBar();
 		}
-
-		ImGui::Begin("Stats");
-		ImGui::Text("Frame Rate: %.1f fps", rate);
-		ImGui::End();
 
 		// If we have a new frame, process it and update the UI
 
@@ -240,30 +373,31 @@ int main()
 		// rs_example.* (from Intel's example.hpp), you may need to put
 		// back the destructor.
 
-		texture color_texture;
-		texture depth_texture;
-		texture filtered_texture;
-
 		if (pp.color)
 		{
-			// Create OpenCV matrix of size (w,h) from the colorized depth data
-			auto width = pp.color.as<rs2::video_frame>().get_width();
-			auto height = pp.color.as<rs2::video_frame>().get_height();
-			uint8_t* pixels = (uint8_t*)pp.color.get_data();
-
-			auto widthDepth = pp.colored_depth.as<rs2::video_frame>().get_width();
-			auto heightDepth = pp.colored_depth.as<rs2::video_frame>().get_height();
-
-			cv::Mat image(cv::Size(width, height), CV_8UC3, (void*)pp.color.get_data(), cv::Mat::AUTO_STEP);
-			hist.DoHistograms(image);
-
-			DisplayFrame(pp.color, "Color", color_texture);
-			DisplayFrame(pp.colored_depth, "Depth", depth_texture);
-			DisplayFrame(pp.colored_filtered, "Filtered Depth", filtered_texture);
+			FrameToTexture(pp.color, color_texture);
+			FrameToTexture(pp.colored_depth, depth_texture);
+			FrameToTexture(pp.colored_filtered, filtered_texture);
 		}
+
+		DisplayTexture("Color", color_texture);
+		DisplayTexture("Depth", depth_texture);
+		DisplayTexture("Filtered Depth", filtered_texture);
+
+		if (ransac.FindFeatures(pp.filtered_points))
+		{
+			fr.NextFrame();
+		}
+
+		auto rate = fr.GetFrameRate();
+		ImGui::Begin("Stats");
+		ImGui::Text("Frame Rate: %.1f fps", rate);
+		ImGui::End();
 
 		pp.RenderUI();
 		ransac.RenderUI();
+		hist.RenderUI();
+
 
 		// Rendering
 		ImGui::Render();
@@ -275,14 +409,42 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+
+////		glClear(GL_COLOR_BUFFER_BIT);
+//
+//		glBegin(GL_TRIANGLES);
+//		glVertex2f(-0.25f, -0.25f);
+//		glVertex2f(0.0f, 0.25f);
+//		glVertex2f(0.25f, -0.25f);
+//		glEnd();
+//
+//
+		int h;
+		int w;
+		glfwGetWindowSize(app, &w, &h);
+		glViewport(2 * w / 3, 0, w / 3, h / 3);
+
+		glClearColor(0.0, 0.0, 0.0, 1);
+		glScissor(2 * w / 3, 0, w / 3, h / 3);
+		glEnable(GL_SCISSOR_TEST);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glDisable(GL_SCISSOR_TEST);
+
+		glfw_state original_view_orientation{ 0, 0 };
+		//draw_pointcloud(w / 3.0, h / 3.0, original_view_orientation, pp.filtered_points);
+
+		draw_pointcloud(w, h, original_view_orientation, ransac.GetLayers());
+
 		glfwSwapBuffers(app);
 
-		pc.DisplayPointCloud(pp.original_points);
-		fpc.DisplayPointCloud(pp.filtered_points);
 
+		//pc.DisplayPointCloud(pp.original_points);
+		//fpc.DisplayPointCloud(pp.filtered_points);
+		//featurePC.DisplayPointCloud(ransac.GetLayers());
 	}
 
-	pp.Stop();
+	pp.StopProcessing();
+	ransac.Stop();
 
 	// Cleanup
 	ImGui_ImplOpenGL3_Shutdown();
@@ -292,6 +454,9 @@ int main()
 	glfwDestroyWindow(app);
 	glfwTerminate();
 
-//	_CrtDumpMemoryLeaks();
+#ifdef _CRTDBG_MAP_ALLOC
+	_CrtDumpMemoryLeaks();
+#endif
+
 	return 0;
 }

@@ -3,6 +3,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc/types_c.h>
 
+#include "CORWFilter.h"
+
 //#define RGB_HIST
 
 class CColorChannelHistogramPlot
@@ -27,8 +29,13 @@ protected:
 	float m_LastYmaxes[c_Ymaxes];	// Save last n ymax values for averaging
 	int m_iCurrentYmax;				// Index into LastYmaxes buffer
 	size_t m_Count;                 // # of data elements
-	int m_nMin;                     // Min selected value
-	int m_nMax;                     // Max selected value
+	union
+	{
+		int m_Vals[2];
+		struct { int m_nMin, m_nMax; };
+	};
+	//int m_nMin;                     // Min selected value
+	//int m_nMax;                     // Max selected value
 	static double m_dPos[256];         // X-Axis values
 
 	std::string m_strLabel;         // Chart label
@@ -37,7 +44,7 @@ protected:
 };
 
 
-class CHistograms
+class CHistograms : public CORWFilter
 {
 public:
 	CHistograms()
@@ -57,7 +64,11 @@ public:
 #endif
 	{}
 
-	void DoHistograms(const cv::Mat& image);
+	virtual void Process(rs2::frame& color_frame, rs2::frame& depth_frame);
+	virtual void SetOption(cof_option opt, void* value);
+
+	void RenderUI();
+	void CalcHistogramMasks(const cv::Mat& image);
 
 	cv::Mat& GetMaskHSV() { return m_maskHSV; }
 

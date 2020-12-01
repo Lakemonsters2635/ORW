@@ -3,12 +3,9 @@
 // License: Apache 2.0. See LICENSE file in root directory.
 // Copyright(c) 2017 Intel Corporation. All Rights Reserved.
 
-#include <librealsense2/rs.hpp> // Include RealSense Cross Platform API
-#include <gl/glew.h>
-#include <GLFW/glfw3.h>
-#include "vendor/imgui/imgui_impl_glfw.h"
-#include "vendor/imgui/imgui_impl_opengl3.h"
-#include "vendor/RealSense/rs_example.h"
+#include "all_includes.h"
+//#include <librealsense2/rs.hpp> // Include RealSense Cross Platform API
+
 #include "Utilities.h"
 
 #include <map>
@@ -42,7 +39,8 @@ void update_data(rs2::frame_queue& data, rs2::frame& colorized_depth, rs2::point
 
 void update_data(rs2::frame_queue& data, rs2::frame& color)
 {
-   data.poll_for_frame(&color);
+   if (!data.poll_for_frame(&color))
+       color = rs2::frame{ nullptr };
 }
 
 CPostProcessing::CPostProcessing()
@@ -52,13 +50,14 @@ CPostProcessing::CPostProcessing()
     , stopped(false)
     , processing_thread(nullptr)
 {
+    m_pAlign = new rs2::align(m_AlignMode);
 
-        // The following order of emplacement will dictate the orders in which filters are applied
-        filters.emplace_back("Decimate", dec_filter);
-        filters.emplace_back("Threshold", thr_filter);
-        filters.emplace_back(disparity_filter_name, depth_to_disparity);
-        filters.emplace_back("Spatial", spat_filter);
-        filters.emplace_back("Temporal", temp_filter);
+    // The following order of emplacement will dictate the orders in which filters are applied
+    filters.emplace_back("Decimate", dec_filter);
+    filters.emplace_back("Threshold", thr_filter);
+    filters.emplace_back(disparity_filter_name, depth_to_disparity);
+    filters.emplace_back("Spatial", spat_filter);
+    filters.emplace_back("Temporal", temp_filter);
 
     // Get the default values for the filters.
     // If the above set of filters changes, the following
@@ -100,6 +99,19 @@ void CPostProcessing::render_ui(/*std::vector<filter_options>& filters*/)
     const int offset_from_checkbox = 105;
     float offset_y = 45;
     float elements_margin = 35;
+
+    ImGui::SetCursorPos({ offset_x, offset_y });
+
+    bool bAlignChanged = ImGui::RadioButton("Align to Depth", (int*) &m_AlignMode, (int) RS2_STREAM_DEPTH); ImGui::SameLine();
+    bAlignChanged |= ImGui::RadioButton("Align to Color", (int*) &m_AlignMode, (int) RS2_STREAM_COLOR);
+    if (bAlignChanged)
+    {
+        g_settings.SetValue("PostProcessing", "Alignment", (int) m_AlignMode);
+        UpdateAlign();
+    }
+
+    offset_y += elements_margin;
+
     for (auto& filter : filters)
     {
         // Draw a checkbox per filter to toggle if it should be applied
@@ -227,6 +239,13 @@ filter_options::filter_options(filter_options&& other) :
 {
 }
 
+void CPostProcessing::StopProcessing()
+{
+    stopped = true;
+    processing_thread->join();              // wait for processing thread to stop
+    stopped = false;
+}
+
 void CPostProcessing::StartProcessing(rs2::pipeline& the_pipe)
 {
     ppipe = &the_pipe;
@@ -234,12 +253,22 @@ void CPostProcessing::StartProcessing(rs2::pipeline& the_pipe)
     processing_thread = new std::thread([&]() {
         while (!stopped) //While application is running
         {
+            PauseLock.lock();                               // If already set, pipeline is locked.
+
             rs2::frameset data = ppipe->wait_for_frames(); // Wait for next set of frames from the camera
+
+            AlignLock.lock();
+            data = m_pAlign->process(data);
+            AlignLock.unlock();
+
             rs2::frame depth_frame = data.get_depth_frame(); //Take the depth frame from the frameset
             rs2::frame color_frame = data.get_color_frame();
 
             if (!depth_frame) // Should not happen but if the pipeline is configured differently
+            {
+                PauseLock.unlock();
                 return;       //  it might not provide depth and we don't want to crash
+            }
 
             rs2::frame filtered = depth_frame; // Does not copy the frame, only adds a reference
 
@@ -270,6 +299,11 @@ void CPostProcessing::StartProcessing(rs2::pipeline& the_pipe)
                 filtered = disparity_to_depth.process(filtered);
             }
 
+            for (auto& myfilter : myFilters)
+            {
+                myfilter->Process(color_frame, filtered);
+            }
+
             // Push filtered & original data to their respective queues
             // Note, pushing to two different queues might cause the application to display
             //  original and filtered pointclouds from different depth frames
@@ -278,7 +312,10 @@ void CPostProcessing::StartProcessing(rs2::pipeline& the_pipe)
             filtered_data.enqueue(filtered);
             original_data.enqueue(depth_frame);
             color_data.enqueue(color_frame);
+
+            PauseLock.unlock();
         }
+
     });
 
 }
@@ -290,8 +327,14 @@ void CPostProcessing::UpdateData()
     update_data(color_data, color);
 }
 
+void CPostProcessing::UploadTextures()
+{
+}
+
 void CPostProcessing::RegisterSettings()
 {
+    g_settings.SetValue("PostProcessing", "Alignment", (int)m_AlignMode);
+
     for (auto& filter : filters)
     {
         auto& name = filter.filter_name;
@@ -310,6 +353,9 @@ void CPostProcessing::RegisterSettings()
 
 void CPostProcessing::ImportSettings()
 {
+    m_AlignMode = (rs2_stream)g_settings.GetValue("PostProcessing", "Alignment", (int)RS2_STREAM_DEPTH);
+    UpdateAlign();
+
     for (auto& filter : filters)
     {
         auto& name = filter.filter_name;
@@ -328,6 +374,9 @@ void CPostProcessing::ImportSettings()
 
 void CPostProcessing::Reset()
 {
+    m_AlignMode = RS2_STREAM_DEPTH;
+    UpdateAlign();
+
     // Loop over filterDefaults structure and use it to reset the filters
 
     for (auto& it : filterDefaults)
@@ -343,4 +392,13 @@ void CPostProcessing::Reset()
     {
         filter.is_enabled = true;                                       // Enable all filters
     }
+}
+
+void CPostProcessing::UpdateAlign()
+{
+    AlignLock.lock();
+    if (m_pAlign != nullptr)
+        delete m_pAlign;
+    m_pAlign = new rs2::align(m_AlignMode);
+    AlignLock.unlock();
 }

@@ -72,7 +72,8 @@ public:
 
 	void New();
 	bool Load(const std::string& filename);
-	void Save();
+	bool Save();
+	void SaveAs();
 	void Save(const std::string& filename);
 	void SaveIfNeeded();
 	void Clear(const std::string& group);

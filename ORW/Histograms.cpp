@@ -1,18 +1,8 @@
-
-#include <gl/glew.h>
-#include <GLFW/glfw3.h>
-#include "vendor/imgui/imgui_impl_glfw.h"
-#include "vendor/imgui/imgui_impl_opengl3.h"
-//#include "vendor/RealSense/example.hpp"
-#include <opencv2/opencv.hpp>
-#include <opencv2/imgproc/types_c.h>
-#include "vendor/implot/implot.h"
-#include "vendor/implot/implot_internal.h"
+#include "all_includes.h"
 
 #include "Histograms.h"
 #include "Utilities.h"
 
-#include <iostream>
 
 namespace MyPlotFunctions
 {
@@ -103,7 +93,7 @@ void CColorChannelHistogramPlot::Draw()                     // Draw the histogra
 		return;
 
 	float ymax = 0;
-	for (int i = 0; i < m_Count; i++)
+	for (int i = 1; i < m_Count; i++)
 		if (m_pData[i] > ymax)
 			ymax = m_pData[i];
 
@@ -123,14 +113,60 @@ void CColorChannelHistogramPlot::Draw()                     // Draw the histogra
 		MyPlotFunctions::PlotHist("", m_pData, (int)m_Count, m_nMin, m_nMax);
 		ImPlot::EndPlot();
 	}
-	if (ImGui::SliderInt(m_strMinLabel.c_str(), &m_nMin, 0, (int)m_Count - 1))
+	if (ImGui::SliderInt2(m_strMinLabel.c_str(), m_Vals, 0, (int)m_Count - 1))
+	{
 		g_settings.SetValue("Histograms", m_strMinLabel, m_nMin);
-	if (ImGui::SliderInt(m_strMaxLabel.c_str(), &m_nMax, 0, (int)m_Count - 1))
 		g_settings.SetValue("Histograms", m_strMaxLabel, m_nMax);
+	}
+}
+
+void CHistograms::Process(rs2::frame& color_frame, rs2::frame& depth_frame)
+{
+	// Create OpenCV matrix of size (w,h) from the colorized depth data
+	auto width = color_frame.as<rs2::video_frame>().get_width();
+	auto height = color_frame.as<rs2::video_frame>().get_height();
+	uint8_t* pixels = (uint8_t*)color_frame.get_data();
+
+	cv::Mat image(cv::Size(width, height), CV_8UC3, (void*)pixels, cv::Mat::AUTO_STEP);
+	CalcHistogramMasks(image);
+}
+
+void CHistograms::SetOption(cof_option opt, void* value)
+{
+}
+
+void CHistograms::RenderUI()
+{
+	ImGui::Begin("Histograms");
+	{
+		if (ImGui::CollapsingHeader("HSV"))
+		{
+			if (ImGui::TreeNode("H"))
+			{
+				cchpH.Draw();
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNode("S"))
+			{
+				cchpS.Draw();
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNode("V"))
+			{
+				cchpV.Draw();
+				ImGui::TreePop();
+			}
+		}
+		if (ImGui::CollapsingHeader("RGB"))
+		{
+			ImGui::Text("Not yet implemented");
+		}
+		ImGui::End();
+	}
 }
 
 
-void CHistograms::DoHistograms(const cv::Mat& image)
+void CHistograms::CalcHistogramMasks(const cv::Mat& image)
 {
 	cv::Mat hsvImage;
 	cv::cvtColor(image, hsvImage, cv::COLOR_RGB2HSV);
@@ -158,14 +194,6 @@ void CHistograms::DoHistograms(const cv::Mat& image)
 
 	s_hist.row(255) = 0;			// Not sure why I need this.  There's a spike in the last value....
 
-	ImGui::Begin("HSV Histograms");
-	{
-		cchpH.Draw();
-		cchpS.Draw();
-		cchpV.Draw();
-		ImGui::End();
-	}
-
 #ifdef RGB_HIST
 	std::vector<cv::Mat> rgbPlanes;
 	cv::split(image, rgbPlanes);
@@ -187,7 +215,8 @@ void CHistograms::DoHistograms(const cv::Mat& image)
 		ImGui::End();
 	}
 #endif
-	// Filter the color image by the HSV (and possibly RGB) values
+	// Calculate the HSV (and possibly RGB) masks
+
 	// ******************  BUGBUG  *********** RGB not done **************
 
 	{
@@ -216,9 +245,11 @@ void CHistograms::DoHistograms(const cv::Mat& image)
 			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMin(), cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(cchpH.GetMax(), cchpS.GetMax(), cchpV.GetMax()), m_maskHSV);
 		}
 
-		cv::Mat dst;
-		cv::bitwise_and(image, image, dst, m_maskHSV);
-		memcpy(image.data, dst.data, dst.step[0] * dst.rows);
+		// Don't apply mask here.  It needs to be applied to both color and depth data,
+		// so we'll do that 
+		//cv::Mat dst;
+		//cv::bitwise_and(image, image, dst, m_maskHSV);
+		//memcpy(image.data, dst.data, dst.step[0] * dst.rows);
 	}
 }
 

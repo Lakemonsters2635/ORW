@@ -1,4 +1,4 @@
-#include <Windows.h>
+#include "all_includes.h"
 
 #include "CSettings.h"
 
@@ -20,6 +20,7 @@ void CSettings::New()
 {
     SaveIfNeeded();
     Clear("");
+    m_Filename = "";
 }
 
 bool CSettings::Load(const std::string& filename)
@@ -66,7 +67,7 @@ bool CSettings::Load(const std::string& filename)
     return true;
 }
 
-void CSettings::Save()
+bool CSettings::Save()
 {
 #ifndef _WIN32
 #error "This code needs to be ported to Linux"
@@ -95,20 +96,34 @@ void CSettings::Save()
         ofn.lpstrInitialDir = szDir;
 
         if (GetSaveFileNameA(&ofn) != TRUE)
-            return;                             // User cancelled
+            return false;                             // User cancelled
 
         m_Filename = ofn.lpstrFile;
     }
 #endif
 
     Save(m_Filename);
+    return true;
+}
+
+void CSettings::SaveAs()
+{
+    std::string saveFilename = m_Filename;
+    m_Filename = "";
+
+    if (Save())
+        return;
+
+    m_Filename = saveFilename;
+    return;
 }
 
 void CSettings::Save(const std::string& filename)
 {
    m_bModified = false;
 
-   pt::write_xml(filename, m_Tree);
+   pt::write_xml(filename, m_Tree, std::locale(),
+       pt::xml_writer_make_settings<std::string>(' ', 4));
 }
 
 void CSettings::SaveIfNeeded()

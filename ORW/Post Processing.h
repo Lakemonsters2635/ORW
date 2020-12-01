@@ -1,4 +1,6 @@
 #pragma once
+#include "CORWFilter.h"
+#include <vector>
 
 // This is copied from example.hpp because we cannot include it in 2 places.
 
@@ -72,19 +74,28 @@ public:
         render_ui(/*filters*/);
     }
 
+    void StopProcessing();
     void StartProcessing(rs2::pipeline& the_pipe);
 
     void UpdateData();
+    void UploadTextures();
+
     void RegisterSettings();
     void ImportSettings();
     void Reset();
 
-    void Stop()
-    {
-        stopped = true;
-    }
+    void AddFilter(const std::string& name, CORWFilter& filter) { filter.SetName(name);  myFilters.emplace_back(&filter); }
+
+    bool IsPaused() { return Paused; }
+    void Pause() { Paused = true;  PauseLock.lock(); }
+    void Continue() { Paused = false; PauseLock.unlock(); }
+    void SetSteps(int nSteps) { nFramesToProcess = nSteps; }
 
 protected:
+    std::mutex PauseLock;                       // Used to pause pipeline thread
+    bool Paused = false;
+    int nFramesToProcess = -1;                  // -1 means run continuously.  Otherwise count down and stop at 0
+
     struct Default
     {
         filter_options& fo;
@@ -94,6 +105,12 @@ protected:
     };
 
     std::map<std::string, Default> filterDefaults;
+    std::vector<CORWFilter*> myFilters;
+
+    rs2::align* m_pAlign = nullptr;             // Alignment object
+    rs2_stream m_AlignMode = RS2_STREAM_DEPTH;  // How to align: RS2_STREAM_DEPTH or RS2_STREAM_COLOR
+    std::mutex AlignLock;                       // Cannot delete m_pAlign when in use
+    void UpdateAlign();                         // Must interact with pipeline thread
 
     rs2::decimation_filter dec_filter;  // Decimation - reduces depth frame density
     rs2::threshold_filter thr_filter;   // Threshold  - removes values outside recommended range

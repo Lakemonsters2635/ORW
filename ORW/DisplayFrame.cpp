@@ -1,14 +1,23 @@
 // DisplayFrame
 
-#include <gl/glew.h>
-#include <GLFW/glfw3.h>
-#include "vendor/imgui/imgui_impl_glfw.h"
-#include "vendor/imgui/imgui_impl_opengl3.h"
-#include "vendor/RealSense/rs_example.h"
-#include <opencv2/opencv.hpp>
-#include <opencv2/imgproc/types_c.h>
+#include "all_includes.h"
 
 #include "Utilities.h"
+
+
+void FrameToTexture(rs2::frame& frame, texture& frame_texture)
+{
+		auto vf = frame.as<rs2::video_frame>();
+		auto width = vf.get_width();
+		auto height = vf.get_height();
+
+		frame_texture.render(vf, { 0, 0, (float)width, (float)height });
+
+		// Intel's example.hpp code doesn't clean up after itself!
+
+		glLoadIdentity();
+		glMatrixMode(GL_PROJECTION);
+}
 
 
 
@@ -17,18 +26,12 @@
 // call texture::upload (which calls render) in updata data.  Really
 // should only do this once.
 
-void DisplayFrame(rs2::frame& frame, const char* Title, texture& frame_texture)
+void DisplayTexture(const char* Title, texture& frame_texture)
 {
 	ImGui::Begin(Title);
 	{
-		auto vf = frame.as<rs2::video_frame>();
-		auto width = vf.get_width();
-		auto height = vf.get_height();
-
 		std::string child(Title);
 		child.append(" Stream");
-
-		frame_texture.render(vf, { 0, 0, (float)width, (float)height });
 
 		// Using a Child allow to fill all the space of the window.
 		// It also alows customization
