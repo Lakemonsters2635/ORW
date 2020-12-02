@@ -7,7 +7,9 @@ public:
 	: m_bHasPicker(bHasPicker)
 	, m_Title(Title)
 	, m_LastClick({ -1.0f, -1.0f })
-	{ 
+	{
+		m_Child = m_Title;
+		m_Child.append(" Stream");
 	}
 
 	void FrameToTexture(rs2::frame& frame);
@@ -24,6 +26,7 @@ protected:
 
 	texture			m_FrameTexture;
 	std::string		m_Title;
+	std::string		m_Child;
 	bool			m_bHasPicker;
 
 	ImVec2			m_MousePos;

@@ -28,12 +28,10 @@ void CDisplayFrame::RenderUI()
 {
 	ImGui::Begin(m_Title.c_str());
 	{
-		std::string child(m_Title);
-		child.append(" Stream");
-
 		// Using a Child allow to fill all the space of the window.
 		// It also alows customization
-		ImGui::BeginChild(child.c_str());
+		ImGui::BeginChild(m_Child.c_str());
+
 		// Get the size of the child (i.e. the whole draw size of the windows).
 		ImGuiWindow* window = ImGui::GetCurrentWindowRead();
 		ImVec2 wsize = ImGui::GetWindowSize();

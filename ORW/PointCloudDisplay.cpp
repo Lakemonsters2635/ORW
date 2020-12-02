@@ -18,8 +18,25 @@ byte3 LayerColors[N_COLORS] = {
 
 void CPointCloudDisplay::draw_pointcloud(const std::vector <feature_ptr>& features)
 {
-	::draw_pointcloud(win.width(), win.height(), app_state, features);
+	if (m_Pos.x < 0 || m_Pos.y < 0)
+		return;
+
+	int h;
+	int w;
+	glfwGetWindowSize(m_win, &w, &h);
+
+	glViewport(m_Pos.x, h - m_Pos.y - m_Size.y, m_Size.x, m_Size.y);				// may by inverted.....
+
+	glClearColor(0.0, 0.0, 0.0, 1);
+	glScissor(m_Pos.x, h - m_Pos.y - m_Size.y, m_Size.x, m_Size.y);
+	glEnable(GL_SCISSOR_TEST);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glDisable(GL_SCISSOR_TEST);
+
+	::draw_pointcloud(m_Size.x, m_Size.y, m_AppState, features);
 }
+
+// Width/Height used for aspect ratio.  width used for text size (not using...)
 
 void draw_pointcloud(float width, float height, glfw_state app_state, const std::vector <feature_ptr>& features)
 {
@@ -103,46 +120,75 @@ void draw_pointcloud(float width, float height, glfw_state app_state, const std:
 
 
 
-CPointCloudDisplay::CPointCloudDisplay(const char* szTitle)
-	: win(640, 480, szTitle)
-	, app_state(0, 0)
+CPointCloudDisplay::CPointCloudDisplay(GLFWwindow* win, const char* szTitle)
+	//: win(640, 480, szTitle)
+	: m_AppState(0, 0)
+	, m_win(win)
 {
 	// register callbacks to allow manipulation of the pointcloud
-	register_glfw_callbacks(win, app_state);
+	//register_glfw_callbacks(win, app_state);
+	m_Title = szTitle;
+	m_Child = szTitle;
+	m_Child.append(" cloud");
+}
+
+void CPointCloudDisplay::RenderUI()
+{
+	if (ImGui::Begin("RANSAC Output"))
+	{
+		// Using a Child allow to fill all the space of the window.
+		// It also alows customization
+		ImGui::BeginChild(m_Child.c_str());
+
+		// Get the size of the child (i.e. the whole draw size of the windows).
+		ImGuiWindow* window = ImGui::GetCurrentWindowRead();
+		m_Pos = window->Pos;
+		m_Size = window->Size;
+
+		ImGui::EndChild();
+
+
+		ImGui::End();
+	}
+	else
+	{
+		m_Pos = { -1.0f, -1.0f };
+		m_Size = { -1.0f, -1.0f };
+	}
 }
 
 
 void CPointCloudDisplay::DisplayPointCloud(rs2::points& points)
 {
-	auto oldCTX = glfwGetCurrentContext();
-	glfwMakeContextCurrent((GLFWwindow*)win);
-	glClear(GL_COLOR_BUFFER_BIT);
+	//auto oldCTX = glfwGetCurrentContext();
+	//glfwMakeContextCurrent((GLFWwindow*)win);
+	//glClear(GL_COLOR_BUFFER_BIT);
 
-	::draw_pointcloud(1280, 1024, app_state, points);
-	/* Swap front and back buffers */
-	glfwSwapBuffers((GLFWwindow*)win);
+	//::draw_pointcloud(1280, 1024, app_state, points);
+	///* Swap front and back buffers */
+	//glfwSwapBuffers((GLFWwindow*)win);
 
-	/* Poll for and process events */
-	glfwPollEvents();
+	///* Poll for and process events */
+	//glfwPollEvents();
 
-	glfwMakeContextCurrent(oldCTX);
+	//glfwMakeContextCurrent(oldCTX);
 }
 
 
 
 void CPointCloudDisplay::DisplayPointCloud(const std::vector <feature_ptr>& features)
 {
-	auto oldCTX = glfwGetCurrentContext();
-	glfwMakeContextCurrent((GLFWwindow*)win);
-	glClear(GL_COLOR_BUFFER_BIT);
+	//auto oldCTX = glfwGetCurrentContext();
+	//glfwMakeContextCurrent((GLFWwindow*)win);
+	//glClear(GL_COLOR_BUFFER_BIT);
 
-	draw_pointcloud(features);
-	/* Swap front and back buffers */
-	glfwSwapBuffers((GLFWwindow*)win);
+	//draw_pointcloud(features);
+	///* Swap front and back buffers */
+	//glfwSwapBuffers((GLFWwindow*)win);
 
-	/* Poll for and process events */
-	glfwPollEvents();
+	///* Poll for and process events */
+	//glfwPollEvents();
 
-	glfwMakeContextCurrent(oldCTX);
+	//glfwMakeContextCurrent(oldCTX);
 }
 

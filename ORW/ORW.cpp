@@ -194,7 +194,7 @@ int main(int argc, char** argv)
 	pp.StartProcessing(*pipe);
 
 	//PointCloudDisplay pc("Point Cloud"), fpc("Filtered Point Cloud"), featurePC("Features Detected");
-	//CPointCloudDisplay pcdRANSAC("RANSAC");			// Used to display RANSAC output
+	CPointCloudDisplay pcdRANSAC(app, "RANSAC Cloud");			// Used to display RANSAC output
 
 	if (!strOrwFile.empty())
 	{
@@ -395,6 +395,7 @@ int main(int argc, char** argv)
 		ransac.RenderUI();
 		hist.RenderUI();
 
+		pcdRANSAC.RenderUI();		// This just renders an empty box.  We'll scribble on it later...
 
 		// Rendering
 		ImGui::Render();
@@ -416,23 +417,23 @@ int main(int argc, char** argv)
 //		glEnd();
 //
 //
-		int h;
-		int w;
-		glfwGetWindowSize(app, &w, &h);
-		glViewport(2 * w / 3, 0, w / 3, h / 3);
+		//int h;
+		//int w;
+		//glfwGetWindowSize(app, &w, &h);
+		//glViewport(2 * w / 3, 0, w / 3, h / 3);
 
-		glClearColor(0.0, 0.0, 0.0, 1);
-		glScissor(2 * w / 3, 0, w / 3, h / 3);
-		glEnable(GL_SCISSOR_TEST);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glDisable(GL_SCISSOR_TEST);
+		//glClearColor(0.0, 0.0, 0.0, 1);
+		//glScissor(2 * w / 3, 0, w / 3, h / 3);
+		//glEnable(GL_SCISSOR_TEST);
+		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		//glDisable(GL_SCISSOR_TEST);
 
-		glfw_state original_view_orientation{ 0, 0 };
+		//glfw_state original_view_orientation{ 0, 0 };
 		//draw_pointcloud(w / 3.0, h / 3.0, original_view_orientation, pp.filtered_points);
 
 		ransac.Lock();
-//		pcdRANSAC.DisplayPointCloud(ransac.GetLayers());
-		draw_pointcloud(w, h, original_view_orientation, ransac.GetLayers());
+		pcdRANSAC.draw_pointcloud(ransac.GetLayers());
+		//draw_pointcloud(w, h, original_view_orientation, ransac.GetLayers());
 		ransac.Unlock();
 
 		glfwSwapBuffers(app);
