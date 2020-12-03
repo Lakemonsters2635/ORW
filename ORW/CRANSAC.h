@@ -4,6 +4,7 @@
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/sample_consensus/method_types.h>
+#include <boost/thread/scoped_thread.hpp>
 
 #include "PCLUtils.h"
 
@@ -52,8 +53,12 @@ public:
 	void Stop()
 	{
 		m_bStop = true;
-		std::cerr << "Shutting down RANSAC: " << processing_thread->get_id() << std::endl;
-		processing_thread->join();			// Wait for thread to exit.
+		work_to_do.notify();					// Wake him up if he's asleep...
+
+		std::cerr << "Shutting down RANSAC: " << processing_thread->get_id();
+		bool b = processing_thread->try_join_for(boost::chrono::seconds(5));			// Probably can use std::thread.join now that we call work_to_do.notify();
+		std::cerr << (b ? " finished" : " exitting anyway") << std::endl;
+		//processing_thread->join();			// Wait for thread to exit.
 	}
 	void Lock() { m_DisplayUpdateLock.lock(); }
 	void Unlock() { m_DisplayUpdateLock.unlock(); }
@@ -84,7 +89,7 @@ protected:
 	float m_fEpsilon = 0;
 	float m_fConeAngle[2];
 
-	std::thread* processing_thread = nullptr;
+	boost::thread* processing_thread = nullptr;
 	bool m_bBusy = false;
 	bool m_bStop = false;
 	Semaphore work_to_do;

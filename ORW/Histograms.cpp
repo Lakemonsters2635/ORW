@@ -3,7 +3,6 @@
 #include "Histograms.h"
 #include "Utilities.h"
 
-
 namespace MyPlotFunctions
 {
 	template <typename T>
@@ -159,17 +158,31 @@ void CHistograms::RenderUI()
 		}
 		if (ImGui::CollapsingHeader("RGB"))
 		{
-			ImGui::Text("Not yet implemented");
+			if (ImGui::TreeNode("R"))
+			{
+				cchpR.Draw();
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNode("G"))
+			{
+				cchpG.Draw();
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNode("B"))
+			{
+				cchpB.Draw();
+				ImGui::TreePop();
+			}
 		}
 		ImGui::End();
 	}
 }
 
 
-void CHistograms::CalcHistogramMasks(const cv::Mat& image)
+void CHistograms::CalcHistogramMasks(const cv::Mat& rgbImage)
 {
 	cv::Mat hsvImage;
-	cv::cvtColor(image, hsvImage, cv::COLOR_RGB2HSV);
+	cv::cvtColor(rgbImage, hsvImage, cv::COLOR_RGB2HSV);
 
 	std::vector<cv::Mat> hsvPlanes;
 	cv::split(hsvImage, hsvPlanes);
@@ -196,28 +209,19 @@ void CHistograms::CalcHistogramMasks(const cv::Mat& image)
 
 #ifdef RGB_HIST
 	std::vector<cv::Mat> rgbPlanes;
-	cv::split(image, rgbPlanes);
+	cv::split(rgbImage, rgbPlanes);
 
 	int histSizeRGB = 256;
 	float rangeRGB[] = { 0, 256 };
 	const float* rangesRGB = { rangeRGB };
-	static cv::Mat r_hist, g_hist, b_hist;
 
 	cv::calcHist(&rgbPlanes[0], 1, &zero, cv::Mat(), r_hist, 1, &histSizeRGB, &rangesRGB, uniform, accumulate);
 	cv::calcHist(&rgbPlanes[1], 1, &zero, cv::Mat(), g_hist, 1, &histSizeRGB, &rangesRGB, uniform, accumulate);
 	cv::calcHist(&rgbPlanes[2], 1, &zero, cv::Mat(), b_hist, 1, &histSizeRGB, &rangesRGB, uniform, accumulate);
 
-	ImGui::Begin("RGB Histograms");
-	{
-		cchpR.Draw();
-		cchpG.Draw();
-		cchpB.Draw();
-		ImGui::End();
-	}
 #endif
-	// Calculate the HSV (and possibly RGB) masks
 
-	// ******************  BUGBUG  *********** RGB not done **************
+	// Calculate the HSV (and possibly RGB) masks
 
 	{
 		if (cchpH.GetMax() < cchpH.GetMin())
@@ -245,11 +249,9 @@ void CHistograms::CalcHistogramMasks(const cv::Mat& image)
 			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMin(), cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(cchpH.GetMax(), cchpS.GetMax(), cchpV.GetMax()), m_maskHSV);
 		}
 
-		// Don't apply mask here.  It needs to be applied to both color and depth data,
-		// so we'll do that 
-		//cv::Mat dst;
-		//cv::bitwise_and(image, image, dst, m_maskHSV);
-		//memcpy(image.data, dst.data, dst.step[0] * dst.rows);
+		cv::inRange(rgbImage, cv::Scalar(cchpR.GetMin(), cchpG.GetMin(), cchpB.GetMin()), cv::Scalar(cchpR.GetMax(), cchpG.GetMax(), cchpB.GetMax()), m_maskRGB);
+		
+		// Don't apply mask here.  It needs to be applied to both color and depth data.
 	}
 }
 

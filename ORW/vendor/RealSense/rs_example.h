@@ -206,14 +206,18 @@ struct window_key_listener {
 
 // Struct for managing rotation of pointcloud view
 struct glfw_state {
-    glfw_state(float yaw = 15.0, float pitch = 15.0);
+    glfw_state(float yaw = 0, float pitch = 0, float panx = 0.0, float pany = 0.0, float offset_z = 0.0);
+    void Reset() { yaw = 0; pitch = 0; panx = 0; pany = 0; offset_x = 0.f; offset_y = 0.f; offset_z = 0; }
     double yaw;
     double pitch;
+    double panx;
+    double pany;
     double last_x;
     double last_y;
     bool ml;
     float offset_x;
     float offset_y;
+    float offset_z;
     texture tex;
 };
 

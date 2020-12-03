@@ -16,8 +16,8 @@ class window;
 
 extern CSettings g_settings;
 
-#define XPRINT(x)	std::cerr << x
-//#define XPRINT(x)	
+//#define XPRINT(x)	std::cerr << x
+#define XPRINT(x)	
 
 // Because the RealSense library cannot (yet) use C++ 20 compiler, and std::semaphore is a C++ 20 feature
 

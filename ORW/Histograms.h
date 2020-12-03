@@ -5,7 +5,7 @@
 
 #include "CORWFilter.h"
 
-//#define RGB_HIST
+#define RGB_HIST
 
 class CColorChannelHistogramPlot
 {
@@ -68,9 +68,12 @@ public:
 	virtual void SetOption(cof_option opt, void* value);
 
 	void RenderUI();
-	void CalcHistogramMasks(const cv::Mat& image);
+	void CalcHistogramMasks(const cv::Mat& rgbImage);
 
 	cv::Mat& GetMaskHSV() { return m_maskHSV; }
+#ifdef RGB_HIST
+	cv::Mat& GetMaskRGB() { return m_maskRGB; }
+#endif
 
 	void RegisterSettings();
 	void ImportSettings();
@@ -81,16 +84,18 @@ protected:
 
 	cv::Mat h_hist, s_hist, v_hist;
 
-	CColorChannelHistogramPlot cchpH;// ("H", (float*)h_hist.ptr(), 180);
-	CColorChannelHistogramPlot cchpS;// ("S", (float*)s_hist.ptr());
-	CColorChannelHistogramPlot cchpV;// ("V", (float*)v_hist.ptr());
+	CColorChannelHistogramPlot cchpH;
+	CColorChannelHistogramPlot cchpS;
+	CColorChannelHistogramPlot cchpV;
 
 #ifdef RGB_HIST
+	cv::Mat m_maskRGB;
+
 	cv::Mat r_hist, g_hist, b_hist;
 
-	CColorChannelHistogramPlot cchpR("R", (float*)r_hist.ptr());
-	CColorChannelHistogramPlot cchpG("G", (float*)g_hist.ptr());
-	CColorChannelHistogramPlot cchpB("B", (float*)b_hist.ptr());
+	CColorChannelHistogramPlot cchpR;
+	CColorChannelHistogramPlot cchpG;
+	CColorChannelHistogramPlot cchpB;
 
 #endif
 

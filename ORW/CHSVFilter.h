@@ -8,7 +8,10 @@
 class CHSVFilter : public CORWFilter
 {
 public:
-	CHSVFilter() {}
+	CHSVFilter()
+	: m_hsvMask(nullptr)
+	, m_rgbMask(nullptr)
+	{}
 
 	virtual void Process(rs2::frame& color_frame, rs2::frame& depth_frame);
 	virtual void SetOption(cof_option opt, void* value);

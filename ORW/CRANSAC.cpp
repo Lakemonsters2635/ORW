@@ -82,8 +82,6 @@ CRANSAC::CRANSAC()
 	Reset();
 }
 
-#define XPRINT(x)	std::cerr << x
-
 
 bool CRANSAC::FindFeatures(const rs2::points& rs2_points)
 {
@@ -95,7 +93,7 @@ bool CRANSAC::FindFeatures(const rs2::points& rs2_points)
 
 	if (!processing_thread)
 	{
-		processing_thread = new std::thread([&]() {
+		processing_thread = new boost::thread([&]() {
 			while (1)
 			{
 				work_to_do.wait();

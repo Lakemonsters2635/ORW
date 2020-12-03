@@ -58,10 +58,10 @@ void draw_pointcloud(float width, float height, glfw_state app_state, const std:
 
 	/*********************  BUGBUG  ********************  Pan and Z offset not yet implemented   */
 
-	glTranslatef(-0.5f, -0.5f, +0.5f /*+ app_state.offset_z * 0.05f*/);
+	glTranslatef(+0.5f + app_state.panx * 0.05f, +0.5f + app_state.pany * 0.05f, -0.5f);
+	glTranslatef(-0.5f, -0.5f, +0.5f + app_state.offset_z * 0.05f);
 	glRotated(app_state.pitch, 1, 0, 0);
 	glRotated(app_state.yaw, 0, 1, 0);
-	glTranslatef(+0.5f /*+ app_state.panx * 0.05f*/, +0.5f /*+ app_state.pany * 0.05f*/, -0.5f);
 
 	glPointSize(width / 640);
 	glEnable(GL_TEXTURE_2D);
@@ -142,9 +142,64 @@ void CPointCloudDisplay::RenderUI()
 
 		// Get the size of the child (i.e. the whole draw size of the windows).
 		ImGuiWindow* window = ImGui::GetCurrentWindowRead();
+		ImVec2 wsize = ImGui::GetWindowSize();
+
+		ImGui::Button("Inside", wsize);
+		
 		m_Pos = window->Pos;
 		m_Size = window->Size;
 
+
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		//if (ImGui::IsMouseClicked(0))
+
+		auto mouseX = (io.MousePos.x - window->Pos.x) / wsize.x;
+		auto mouseY = (io.MousePos.y - window->Pos.y) / wsize.y;
+
+		if (ImGui::IsMousePosValid() && mouseX >= 0 && mouseX < 1.0 && mouseY >= 0 && mouseY < 1.0)
+		{
+			//std::cerr << io.MouseWheel << std::endl;
+
+			m_AppState.offset_z += io.MouseWheel / 10.0f;
+
+			if (ImGui::IsMouseClicked(0))
+			{
+				m_AppState.last_x = io.MousePos.x;
+				m_AppState.last_y = io.MousePos.y;
+			}
+			m_LastPos = io.MousePos;
+
+			if (ImGui::IsMouseDown(0))
+			{
+				m_AppState.yaw -= (io.MousePos.x - m_AppState.last_x);
+				m_AppState.yaw = std::max(m_AppState.yaw, -120.0);
+				m_AppState.yaw = std::min(m_AppState.yaw, +120.0);
+				m_AppState.pitch += (io.MousePos.y - m_AppState.last_y);
+				m_AppState.pitch = std::max(m_AppState.pitch, -80.0);
+				m_AppState.pitch = std::min(m_AppState.pitch, +80.0);
+
+				m_AppState.last_x = io.MousePos.x;
+				m_AppState.last_y = io.MousePos.y;
+			}
+			if (ImGui::IsMouseDown(2))
+			{
+				m_AppState.panx += (io.MousePos.x - m_AppState.last_x)/5;
+				m_AppState.pany += (io.MousePos.y - m_AppState.last_y)/5;
+
+				m_AppState.last_x = io.MousePos.x;
+				m_AppState.last_y = io.MousePos.y;
+			}
+
+			if (io.InputQueueCharacters.size() + 0)
+			{
+				auto c = io.InputQueueCharacters[0];
+				switch (c)
+				{
+				case ' ':
+					m_AppState.Reset();
+				}
+			}
+		}
 		ImGui::EndChild();
 
 

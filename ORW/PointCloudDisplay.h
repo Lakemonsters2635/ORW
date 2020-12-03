@@ -37,6 +37,6 @@ private:
 	GLFWwindow*			m_win;
 	glfw_state			m_AppState;		// Object to manage view state
 
-
+	ImVec2				m_LastPos;		// For calculating mouse movements
 };
 

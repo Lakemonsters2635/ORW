@@ -190,6 +190,7 @@ int main(int argc, char** argv)
 	CHSVFilter hsvFilter;
 	pp.AddFilter("HSV", hsvFilter);
 	hsvFilter.SetOption(CORWFilter::COF_OPTION_HSVMASK, &hist.GetMaskHSV());
+	hsvFilter.SetOption(CORWFilter::COF_OPTION_RGBMASK, &hist.GetMaskRGB());
 
 	pp.StartProcessing(*pipe);
 

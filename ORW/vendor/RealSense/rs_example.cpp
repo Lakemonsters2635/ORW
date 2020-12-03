@@ -678,13 +678,16 @@ int window_key_listener::get_key() {
 }
 
 
-glfw_state::glfw_state(float yaw, float pitch) 
+glfw_state::glfw_state(float yaw, float pitch, float panx, float pany, float offset_z)
 	: yaw(yaw), pitch(pitch)
 	, last_x(0.0)
 	, last_y(0.0)
 	, ml(false)
 	, offset_x(2.f)
 	, offset_y(2.f)
+	, offset_z(0.f)
+	, panx(panx)
+	, pany(pany)
 	, tex()
 {
 }
