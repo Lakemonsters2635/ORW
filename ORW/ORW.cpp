@@ -126,6 +126,7 @@ int main(int argc, char** argv)
 			std::cerr << "No cameras and no input file\n";
 		}
 		cfg.enable_device_from_file(strBagFile);
+		nCurrentCamera = -1;
 	}
 	else
 	{
