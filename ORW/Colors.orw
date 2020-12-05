@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RANSAC>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <Model>7</Model>
+    <RadiusLimits0>0.0860000029</RadiusLimits0>
+    <RadiusLimits1>0.137999997</RadiusLimits1>
+    <DistanceThreshhold>0.0199999996</DistanceThreshhold>
+    <Axis0>1</Axis0>
+    <Axis1>0</Axis1>
+    <Axis2>0</Axis2>
+    <Epsilon>0.100000001</Epsilon>
+    <Iterations>5000</Iterations>
+</RANSAC>
+<Histograms>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+
+    <Hmax>255</Hmax>
+    <Hmin>0</Hmin>
+    <Vmax>255</Vmax>
+    <Vmin>0</Vmin>
+    <Smax>255</Smax>
+    <Smin>0</Smin>
+</Histograms>
+<PostProcessing>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    <Decimate_Enabled>false</Decimate_Enabled>
+    <Threshold_Max_Distance>16</Threshold_Max_Distance>
+    <Alignment>2</Alignment>
+    <Decimate_Filter_Magnitude>5</Decimate_Filter_Magnitude>
+    <Threshold_Enabled>false</Threshold_Enabled>
+    <Threshold_Min_Distance>0.708000004</Threshold_Min_Distance>
+    <Disparity_Enabled>false</Disparity_Enabled>
+    <Spatial_Enabled>false</Spatial_Enabled>
+    <Spatial_Filter_Magnitude>2</Spatial_Filter_Magnitude>
+    <Spatial_Filter_Smooth_Alpha>0.5</Spatial_Filter_Smooth_Alpha>
+    <Spatial_Filter_Smooth_Delta>20</Spatial_Filter_Smooth_Delta>
+    <Spatial_Holes_Fill>0</Spatial_Holes_Fill>
+    <Temporal_Enabled>false</Temporal_Enabled>
+    <Temporal_Filter_Smooth_Alpha>0.400000006</Temporal_Filter_Smooth_Alpha>
+    <Temporal_Filter_Smooth_Delta>20</Temporal_Filter_Smooth_Delta>
+    <Temporal_Holes_Fill>3</Temporal_Holes_Fill>
+</PostProcessing>
