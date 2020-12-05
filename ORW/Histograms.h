@@ -7,6 +7,8 @@
 
 #define RGB_HIST
 
+#define	MAX_H_VALUE		180
+
 class CColorChannelHistogramPlot
 {
 public:
@@ -48,10 +50,10 @@ class CHistograms : public CORWFilter
 {
 public:
 	CHistograms()
-		: h_hist(180, 1, CV_32F)
+		: h_hist(MAX_H_VALUE, 1, CV_32F)
 		, s_hist(256, 1, CV_32F)
 		, v_hist(256, 1, CV_32F)
-		, cchpH("H", (float*)h_hist.ptr(), 180)
+		, cchpH("H", (float*)h_hist.ptr(), MAX_H_VALUE)
 		, cchpS("S", (float*)s_hist.ptr())
 		, cchpV("V", (float*)v_hist.ptr())
 #ifdef RGB_HIST

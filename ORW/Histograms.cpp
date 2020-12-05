@@ -188,10 +188,10 @@ void CHistograms::CalcHistogramMasks(const cv::Mat& rgbImage)
 	cv::split(hsvImage, hsvPlanes);
 
 	int histSizeSV = 256;
-	int histSizeH = 180;
+	int histSizeH = MAX_H_VALUE;
 
 	float rangeSV[] = { 0, 256 };
-	float rangeH[] = { 0, 180 };
+	float rangeH[] = { 0, MAX_H_VALUE };
 
 	const float* rangesSV = { rangeSV };
 	const float* rangesH = { rangeH };
@@ -235,7 +235,7 @@ void CHistograms::CalcHistogramMasks(const cv::Mat& rgbImage)
 
 			cv::Mat maskH, maskSV;
 
-			cv::inRange(hsvImage, cv::Scalar(0, cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(180, cchpS.GetMax(), cchpV.GetMax()), maskSV);
+			cv::inRange(hsvImage, cv::Scalar(0, cchpS.GetMin(), cchpV.GetMin()), cv::Scalar(MAX_H_VALUE, cchpS.GetMax(), cchpV.GetMax()), maskSV);
 
 			cv::inRange(hsvImage, cv::Scalar(cchpH.GetMax(), 0, 0), cv::Scalar(cchpH.GetMin(), 256, 256), maskH);
 			cv::bitwise_not(maskH, maskH);
